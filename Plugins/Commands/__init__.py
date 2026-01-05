@@ -1,6 +1,7 @@
-from importlib import import_module
+# Commands插件
 
-from Scripts.Config import config
-
-for command in config.command_enabled:
-    import_module('Plugins.Commands.' + command.capitalize())
+from .Bound import *
+from .Cmd import *
+from .List import *
+from .Shell import *
+from .Mcdr import *

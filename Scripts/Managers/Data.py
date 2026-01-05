@@ -1,115 +1,62 @@
-from hashlib import md5
-from json import loads, dump
+"""
+数据管理器
+"""
 from pathlib import Path
-from time import time
-
+from typing import List
+from pydantic import BaseModel
 from nonebot.log import logger
 
-from ..Config import config
-from .Resources import resources_manager
+
+class ServerData(BaseModel):
+    """服务器数据模型"""
+    servers: List[str] = []
 
 
 class DataManager:
-    webui_token: str = None
-
-    servers: list = []
-    players: dict = {}
-    commands: dict = {}
-
-    data_dir = Path('Data')
-
+    def __init__(self):
+        self.data_path = Path('./Data/Server.json')
+        self.data: ServerData = ServerData()
+        self._load()
+    
+    def _load(self):
+        """加载数据"""
+        if self.data_path.exists():
+            try:
+                import json
+                with open(self.data_path, 'r', encoding='utf-8') as f:
+                    raw_data = json.load(f)
+                    self.data = ServerData(**raw_data)
+            except Exception as e:
+                logger.error(f'加载数据失败: {e}')
+                self.data = ServerData()
+        else:
+            self.data = ServerData()
+    
     def load(self):
-        self.load_bot_data()
-        logger.info('加载数据文件……')
-        if not self.data_dir.exists():
-            logger.warning('数据文件目录不存在，正在创建数据目录……')
-            self.data_dir.mkdir()
-        count_flag = 0
-        webui_file = (self.data_dir / 'Webui.bin')
-        server_file = (self.data_dir / 'Server.json')
-        player_file = (self.data_dir / 'Player.json')
-        if webui_file.exists():
-            count_flag += 1
-            self.webui_token = loads(webui_file.read_text('Utf-8'))
-        else: self.create_token()
-        if server_file.exists():
-            count_flag += 1
-            self.servers = loads(server_file.read_text('Utf-8'))
-        if player_file.exists():
-            count_flag += 1
-            self.players = loads(player_file.read_text('Utf-8'))
-        if count_flag == 3:
-            logger.success('加载数据文件完毕！')
-            return None
-        logger.warning('服务器信息文件不存在，正在创建服务器信息文件……')
-        self.save()
-
-    def load_bot_data(self):
-        logger.debug('正在加载机器人数据……')
-        self.commands = loads(resources_manager.read_file('Commands.json'))
-        logger.success('加载正在加载机器人数据完毕！')
-
+        """公开的加载方法"""
+        self._load()
+    
     def save(self):
-        logger.debug('正在保存数据文件……')
-        webui_file = (self.data_dir / 'Webui.bin')
-        server_file = (self.data_dir / 'Server.json')
-        player_file = (self.data_dir / 'Player.json')
-        with webui_file.open('w', encoding='Utf-8') as file:
-            dump(self.webui_token, file)
-        with server_file.open('w', encoding='Utf-8') as file:
-            dump(self.servers, file)
-        with player_file.open('w', encoding='Utf-8') as file:
-            dump(self.players, file)
-        logger.success('保存数据文件完毕！')
-
-    def create_token(self):
-        md5_digest = md5()
-        md5_digest.update(F'{time() * 1000} Webui'.encode('Utf-8'))
-        self.webui_token = md5_digest.hexdigest()
-
-    def remove_server(self, name: str):
-        self.servers.remove(name)
-        self.save()
-
+        """保存数据"""
+        try:
+            self.data_path.parent.mkdir(parents=True, exist_ok=True)
+            import json
+            with open(self.data_path, 'w', encoding='utf-8') as f:
+                json.dump(self.data.model_dump(), f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f'保存数据失败: {e}')
+    
     def append_server(self, name: str):
-        if name not in self.servers:
-            self.servers.append(name)
+        """添加服务器"""
+        if name not in self.data.servers:
+            self.data.servers.append(name)
             self.save()
-
-    def append_player(self, user: str, player: str):
-        if user not in self.players:
-            self.players[user] = [player]
-            self.save()
-            return True
-        if config.qq_bound_max_number == 0:
-            self.players[user].append(player)
-            self.save()
-            return True
-        if len(self.players[user]) < config.qq_bound_max_number:
-            self.players[user].append(player)
-            self.save()
-            return True
-        return False
-
-    def remove_player(self, user: str, player: str = None):
-        if not player:
-            bounded = self.players.pop(user, None)
-            self.save()
-            return bounded
-        if player in self.players[user]:
-            self.players[user].remove(player)
-            if not self.players[user]:
-                self.players.pop(user)
-            self.save()
-            return player
-        return False
-
-    def check_player_occupied(self, player: str):
-        player = player.lower()
-        for bounded_players in self.players.values():
-            if player in (bounded_player.lower() for bounded_player in bounded_players):
-                return True
-        return False
+    
+    @property
+    def servers(self) -> List[str]:
+        """获取服务器列表"""
+        return self.data.servers
 
 
 data_manager = DataManager()
+

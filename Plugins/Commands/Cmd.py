@@ -1,5 +1,5 @@
 """
-MCDR命令插件 - 在指定服务器执行MCDR命令
+服务器命令插件 - 在指定服务器执行命令
 """
 import asyncio
 import re
@@ -13,17 +13,17 @@ from Scripts.Core.Message import EventType
 from Scripts.Utils import MC_SERVER_ADMIN_PERMISSION
 
 
-matcher = on_regex(r'^#mcdr\s(?P<server>\S+)\s+(?P<command>.*)$', priority=10, block=True, permission=MC_SERVER_ADMIN_PERMISSION)
+matcher = on_regex(r'^#cmd\s(?P<server>\S+)\s+(?P<command>.*)$', priority=10, block=True, permission=MC_SERVER_ADMIN_PERMISSION)
 
 
 @matcher.handle()
-async def handle_mcdr(event: MessageEvent):
-    """处理MCDR命令"""
+async def handle_cmd(event: MessageEvent):
+    """处理服务器命令"""
     
     message_text = str(event.message).strip()
-    match = re.match(r'^#mcdr\s(?P<server>\S+)\s+(?P<command>.*)$', message_text)
+    match = re.match(r'^#cmd\s(?P<server>\S+)\s+(?P<command>.*)$', message_text)
     if not match:
-        await matcher.finish('命令格式错误！格式：#mcdr <服务器> <MCDR命令>')
+        await matcher.finish('命令格式错误！')
         return
     
     server_flag = match.group('server')
@@ -33,13 +33,13 @@ async def handle_mcdr(event: MessageEvent):
         await matcher.finish('命令不能为空！')
         return
     
-    logger.info(f'用户 {event.user_id} 在服务器 {server_flag} 执行MCDR命令: {command}')
+    logger.info(f'用户 {event.user_id} 在服务器 {server_flag} 执行命令: {command}')
     
     if server_flag == '*':
-        # 执行到所有MCDR服务器
-        results = await server_manager.execute_mcdr(command)
+        # 执行到所有服务器
+        results = await server_manager.execute(command)
         if not results:
-            await matcher.finish('没有可用的MCDR服务器！')
+            await matcher.finish('没有可用的服务器！')
             return
         
         response = ''
@@ -61,26 +61,21 @@ async def handle_mcdr(event: MessageEvent):
         from Scripts.Core.Connection import connection_manager
         from Scripts.Core.EventRouter import event_router
         
-        # 检查服务器类型是否为MCDR
         if conn := connection_manager.get(server.name):
-            if conn.type != 'McdReforged':
-                await matcher.finish(f'服务器 [{server.name}] 不是MCDR服务器！')
-                return
-            
             future = asyncio.Future()
             
             async def callback(data: Any):
                 future.set_result(data)
             
             echo_id = event_router.request(callback, timeout=5.0)
-            await conn.send(EventType.MCDR_COMMAND, command, echo=echo_id)
+            await conn.send(EventType.COMMAND, command, echo=echo_id)
             
             try:
                 result = await asyncio.wait_for(future, timeout=5.0)
                 if result:
                     await matcher.finish(f'服务器 [{server.name}] 执行结果：\n{result}')
                 else:
-                    await matcher.finish(f'MCDR命令已发送到服务器 [{server.name}]！')
+                    await matcher.finish(f'命令已发送到服务器 [{server.name}]！')
             except asyncio.TimeoutError:
                 await matcher.finish(f'服务器 [{server.name}] 响应超时！')
         else:

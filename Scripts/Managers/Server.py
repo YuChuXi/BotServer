@@ -1,140 +1,144 @@
+"""
+服务器管理器 - 使用事件路由和并发处理
+"""
 import asyncio
-from typing import Union
-
-from nonebot.drivers import WebSocket
-from nonebot.exception import WebSocketClosed
+from typing import Union, Optional, Callable, Awaitable, Any
 from nonebot.log import logger
 
-from .Data import data_manager
+from ..Core.Connection import connection_manager
+from ..Core.EventRouter import event_router
+from ..Core.Message import EventType
 from ..Config import config
-from ..Utils import Json
-
-
-class Server:
-    name: str = None
-    type: str = None
-    status: bool = True
-    websocket: WebSocket = None
-    player_list: list[str]
-
-    def __init__(self, name: str, websocket: WebSocket):
-        self.name = name
-        self.websocket = websocket
-        self.type = websocket.request.headers.get('type')
-
-    async def disconnect(self):
-        self.status = False
-        await self.websocket.close()
-        logger.success(F'已断开与服务器 [{self.name}] 的连接！')
-
-    async def send_data(self, event_type: str, data: object = None, wait: bool = True):
-        if self.websocket.closed:
-            logger.info(F'检测到与服务器 [{self.name}] 的连接已断开！')
-            self.status = False
-            return None
-        try:
-            message_data = {'type': event_type}
-            if data is not None:
-                message_data['data'] = data
-            await self.websocket.send(Json.encode(message_data))
-            if wait is True:
-                logger.debug(F'已向服务器 [{self.name}] 发送数据 {message_data}，正在等待回应……')
-                response = Json.decode(await self.websocket.receive())
-                if response.get('success'):
-                    logger.debug(F'已收到服务器 [{self.name}] 的回应 {response}，数据发送成功！')
-                    return response.get('data')
-                logger.debug(F'向服务器 [{self.name}] 发送数据 {event_type} 失败！')
-                return None
-            logger.debug(F'向服务器 [{self.name}] 发送数据 {message_data}')
-        except (WebSocketClosed, ConnectionError):
-            self.status = False
-            logger.warning(F'与服务器 [{self.name}] 的连接已断开！')
-            return None
-
-    async def send_command(self, command: str):
-        return await self.send_data('command', command)
-
-    async def send_mcdr_command(self, command: str):
-        return await self.send_data('mcdr_command', command)
-
-    async def send_player_list(self):
-        if config.list_compatible_mode:
-            return self.player_list
-        return await self.send_data('player_list')
-
-    async def send_server_occupation(self):
-        if data := await self.send_data('server_occupation'):
-            return tuple(round(percent, 2) for percent in data)
-
-    async def send_message(self, message_data: list):
-        await self.send_data('message', message_data, wait=False)
+from .Data import data_manager
 
 
 class ServerManager:
-    servers: dict[str, Server] = {}
-
-    def check_online(self):
-        return any(server.status for server in self.servers.values())
-
-    def append_server(self, name: str, websocket: WebSocket):
-        server = Server(name, websocket)
-        self.servers[name] = server
-        return server
-
-    def get_server(self, server_flag: Union[str, int]):
-        if isinstance(server_flag, int) or server_flag.isdigit():
+    """服务器管理器"""
+    
+    def __init__(self):
+        self._init_handlers()
+    
+    def _init_handlers(self):
+        """初始化事件处理器"""
+        # 注册响应处理器
+        event_router.register(EventType.COMMAND_RESPONSE.value, self._handle_command_response)
+        event_router.register(EventType.MCDR_COMMAND_RESPONSE.value, self._handle_mcdr_command_response)
+        event_router.register(EventType.PLAYER_LIST_RESPONSE.value, self._handle_player_list_response)
+        event_router.register(EventType.SERVER_OCCUPATION_RESPONSE.value, self._handle_occupation_response)
+    
+    async def _handle_command_response(self, data: Any, echo: Optional[str] = None):
+        """处理命令响应"""
+        # 响应通过callback处理，这里不需要额外操作
+        pass
+    
+    async def _handle_mcdr_command_response(self, data: Any, echo: Optional[str] = None):
+        """处理MCDR命令响应"""
+        # 响应通过callback处理，这里不需要额外操作
+        pass
+    
+    async def _handle_player_list_response(self, data: list, echo: Optional[str] = None):
+        """处理玩家列表响应"""
+        # 响应通过callback处理，callback会更新result，这里不需要额外操作
+        pass
+    
+    async def _handle_occupation_response(self, data: tuple, echo: Optional[str] = None):
+        """处理占用率响应"""
+        # 响应通过callback处理，这里不需要额外操作
+        pass
+    
+    def get_server(self, server_flag: Union[str, int]) -> Optional:
+        """获取服务器连接"""
+        if isinstance(server_flag, int) or (isinstance(server_flag, str) and server_flag.isdigit()):
             index = int(server_flag)
             if index > len(data_manager.servers):
                 return None
             server_flag = data_manager.servers[index - 1]
-        if (server := self.servers.get(server_flag)) and server.status:
-            return server
-
-    async def disconnect_server(self, name: str):
-        if server := self.servers.get(name):
-            await server.disconnect()
-
-    async def execute(self, command: str):
-        tasks = {}
-        logger.debug(F'执行命令 [{command}] 到所有已连接的服务器。')
-        for name, server in self.servers.items():
-            if server.status:
-                tasks[name] = asyncio.create_task(server.send_command(command))
-        return {name: await task for name, task in tasks.items()}
-
-    async def execute_mcdr(self, command: str):
-        tasks = {}
-        logger.debug(F'执行命令 [{command}] 到所有已连接的服务器。')
-        for name, server in self.servers.items():
-            if server.status and server.type == 'McdReforged':
-                tasks[name] = asyncio.create_task(server.send_mcdr_command(command))
-        return {name: await task for name, task in tasks.items()}
-
-    async def get_player_list(self):
-        tasks = {}
-        logger.debug('获取所有已连接服务器的玩家列表。')
-        for name, server in self.servers.items():
-            if server.status:
-                tasks[name] = asyncio.create_task(server.send_player_list())
-        return {name: await task for name, task in tasks.items()}
-
-    async def get_server_occupation(self):
-        tasks = {}
-        logger.debug('获取所有已连接服务器的占用率。')
-        for name, server in self.servers.items():
-            if server.status:
-                tasks[name] = asyncio.create_task(server.send_server_occupation())
-        return {name: await task for name, task in tasks.items()}
-
+        
+        return connection_manager.get(server_flag)
+    
+    async def _request_all_servers(
+        self,
+        event_type: EventType,
+        data: Any = None,
+        filter_func: Optional[Callable[[str, Any], bool]] = None,
+        callback_extra: Optional[Callable[[str, Any], None]] = None,
+        timeout: float = 5.0
+    ) -> dict[str, Any]:
+        """通用的并发请求所有服务器方法"""
+        result = {}
+        futures = {}
+        
+        def make_callback(server_name: str):
+            async def cb(response_data: Any):
+                result[server_name] = response_data
+                if callback_extra:
+                    callback_extra(server_name, response_data)
+                if server_name in futures:
+                    futures[server_name].set_result(response_data)
+            return cb
+        
+        tasks = []
+        
+        for name, conn in connection_manager.connections.items():
+            if not conn.status:
+                continue
+            if filter_func and not filter_func(name, conn):
+                continue
+            
+            future = asyncio.Future()
+            futures[name] = future
+            echo_id = event_router.request(make_callback(name), timeout=timeout)
+            tasks.append(conn.send(event_type, data, echo=echo_id))
+        
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+            if futures:
+                await asyncio.gather(*futures.values(), return_exceptions=True)
+        
+        return result
+    
+    async def execute(self, command: str) -> dict[str, Any]:
+        """并发执行命令到所有服务器，返回执行结果"""
+        return await self._request_all_servers(EventType.COMMAND, command)
+    
+    async def execute_mcdr(self, command: str) -> dict[str, Any]:
+        """并发执行MCDR命令到所有服务器，返回执行结果"""
+        return await self._request_all_servers(
+            EventType.MCDR_COMMAND,
+            command,
+            filter_func=lambda name, conn: conn.type == 'McdReforged'
+        )
+    
+    async def get_player_list(self) -> dict[str, list[str]]:
+        """并发获取所有服务器玩家列表"""
+        def update_player_list(server_name: str, data: list):
+            if conn := connection_manager.get(server_name):
+                conn.player_list = data if data else []
+        
+        return await self._request_all_servers(
+            EventType.PLAYER_LIST,
+            callback_extra=update_player_list
+        )
+    
+    async def get_server_occupation(self) -> dict[str, tuple[float, float]]:
+        """并发获取所有服务器占用率"""
+        return await self._request_all_servers(EventType.SERVER_OCCUPATION)
+    
     async def broadcast(self, source: str, player: str = None, message: str = None, except_server: str = None):
-        tasks = {}
-        message_data = [{'color': config.sync_color_source, 'text': F'[{source}] '}]
-        if player: message_data.append({'color': config.sync_color_player, 'text': F'<{player}> '})
-        if message: message_data.append({'color': config.sync_color_message, 'text': message})
-        for name, server in self.servers.items():
-            if ((except_server is None) or name != except_server) and server.status:
-                tasks[name] = asyncio.create_task(server.send_message(message_data))
-        return {name: await task for name, task in tasks.items()}
+        """并发广播消息到所有服务器"""
+        message_data = [{'color': config.message_color_source, 'text': F'[{source}] '}]
+        if player:
+            message_data.append({'color': config.message_color_player, 'text': F'<{player}> '})
+        if message:
+            message_data.append({'color': config.message_color_content, 'text': message})
+        
+        tasks = []
+        for name, conn in connection_manager.connections.items():
+            if conn.status and name != except_server:
+                tasks.append(conn.send(EventType.MESSAGE, message_data))
+        
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
 
 server_manager = ServerManager()
