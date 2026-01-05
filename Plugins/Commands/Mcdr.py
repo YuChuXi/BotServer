@@ -1,34 +1,88 @@
-from nonebot import on_command
-from nonebot.adapters.onebot.v11 import GroupMessageEvent, Message
+"""
+MCDR命令插件 - 在指定服务器执行MCDR命令
+"""
+import asyncio
+import re
+from typing import Any
+from nonebot import on_regex
+from nonebot.adapters.onebot.v11 import MessageEvent
 from nonebot.log import logger
-from nonebot.params import CommandArg
 
 from Scripts.Managers import server_manager
-from Scripts.Utils import Rules, get_permission, get_args
+from Scripts.Core.Message import EventType
+from Scripts.Utils import MC_SERVER_ADMIN_PERMISSION
 
-logger.debug('加载命令 Mcdr 完毕！')
-matcher = on_command('mcdr', force_whitespace=True, rule=Rules.command_rule)
+
+matcher = on_regex(r'^#mcdr\s(?P<server>\S+)\s+(?P<command>.*)$', priority=10, block=True, permission=MC_SERVER_ADMIN_PERMISSION)
 
 
 @matcher.handle()
-async def handle_group(event: GroupMessageEvent, args: Message = CommandArg()):
-    if not get_permission(event):
-        await matcher.finish('你没有权限执行此命令！')
-    message = await mcdr_handler(get_args(args))
-    await matcher.finish(message)
-
-
-async def mcdr_handler(args: list):
-    if len(args) <= 1:
-        return '参数不正确！请查看语法后再试。'
-    server_flag, *command = args
-    command = ' '.join(command)
-    if not command.startswith('!!'):
-        command = ('!!' + command)
+async def handle_mcdr(event: MessageEvent):
+    """处理MCDR命令"""
+    
+    message_text = str(event.message).strip()
+    match = re.match(r'^#mcdr\s(?P<server>\S+)\s+(?P<command>.*)$', message_text)
+    if not match:
+        await matcher.finish('命令格式错误！格式：#mcdr <服务器> <MCDR命令>')
+        return
+    
+    server_flag = match.group('server')
+    command = match.group('command').strip()
+    
+    if not command:
+        await matcher.finish('命令不能为空！')
+        return
+    
+    logger.info(f'用户 {event.user_id} 在服务器 {server_flag} 执行MCDR命令: {command}')
+    
     if server_flag == '*':
-        await server_manager.execute_mcdr(command)
-        return '命令已发送到所有已连接的服务器！'
-    if server := server_manager.get_server(server_flag):
-        await server.send_mcdr_command(command)
-        return F'命令发送到服务器 [{server.name}] 完毕！'
-    return F'服务器 [{server_flag}] 不存在！'
+        # 执行到所有MCDR服务器
+        results = await server_manager.execute_mcdr(command)
+        if not results:
+            await matcher.finish('没有可用的MCDR服务器！')
+            return
+        
+        response = ''
+        for name, result in results.items():
+            if isinstance(result, Exception):
+                response += f'[{name}]: 执行失败 - {result}\n'
+            elif result:
+                response += f'[{name}]: {result}\n'
+            else:
+                response += f'[{name}]: 无返回结果\n'
+        await matcher.finish(response.strip())
+    else:
+        # 执行到指定服务器
+        server = server_manager.get_server(server_flag)
+        if not server:
+            await matcher.finish(f'服务器 [{server_flag}] 不存在或未在线！')
+            return
+        
+        from Scripts.Core.Connection import connection_manager
+        from Scripts.Core.EventRouter import event_router
+        
+        # 检查服务器类型是否为MCDR
+        if conn := connection_manager.get(server.name):
+            if conn.type != 'McdReforged':
+                await matcher.finish(f'服务器 [{server.name}] 不是MCDR服务器！')
+                return
+            
+            future = asyncio.Future()
+            
+            async def callback(data: Any):
+                future.set_result(data)
+            
+            echo_id = event_router.request(callback, timeout=5.0)
+            await conn.send(EventType.MCDR_COMMAND, command, echo=echo_id)
+            
+            try:
+                result = await asyncio.wait_for(future, timeout=5.0)
+                if result:
+                    await matcher.finish(f'服务器 [{server.name}] 执行结果：\n{result}')
+                else:
+                    await matcher.finish(f'MCDR命令已发送到服务器 [{server.name}]！')
+            except asyncio.TimeoutError:
+                await matcher.finish(f'服务器 [{server.name}] 响应超时！')
+        else:
+            await matcher.finish(f'服务器 [{server.name}] 连接不可用！')
+

@@ -1,44 +1,39 @@
-from datetime import datetime
-
+"""
+监听器 - 监听QQ群成员退群事件，自动移除白名单
+"""
 from nonebot import on_notice
-from nonebot.adapters.onebot.v11 import GroupDecreaseNoticeEvent, GroupIncreaseNoticeEvent, PokeNotifyEvent
+from nonebot.adapters.onebot.v11 import GroupDecreaseNoticeEvent
 from nonebot.log import logger
 
-from Scripts.Config import config
-from Scripts.Managers import data_manager, server_manager
-from Scripts.Network import request
-from Scripts.Utils import Rules, turn_message
+from Scripts.Managers import bound_manager
 
-matcher = on_notice(rule=Rules.message_rule, priority=15, block=False)
-week_mapping = ('一', '二', '三', '四', '五', '六', '日')
+
+matcher = on_notice(priority=10)
 
 
 @matcher.handle()
-async def watch_decrease(event: GroupDecreaseNoticeEvent):
-    logger.info(F'检测到用户 {event.user_id} 离开了群聊！')
-    if players := data_manager.remove_player(str(event.user_id)):
-        for single_player in players:
-            await server_manager.execute(F'{config.whitelist_command} remove {single_player}')
-        await matcher.finish(F'用户 {event.user_id} 离开了群聊，自动从白名单中移除 {"、".join(players)} 玩家。')
+async def handle_group_decrease(event: GroupDecreaseNoticeEvent):
+    """处理群成员减少事件（退群）"""
+    if not isinstance(event, GroupDecreaseNoticeEvent):
+        return
+    
+    qq = str(event.user_id)
+    
+    # 检查是否有绑定
+    bindings = bound_manager.get_bindings(qq)
+    if not bindings.bedrock and not bindings.java:
+        return  # 没有绑定，不需要处理
+    
+    # 检查是否已在黑名单中
+    if bound_manager.is_blacklisted(qq):
+        logger.info(f'QQ {qq} 退群，已在黑名单中')
+        return
+    
+    logger.info(f'检测到QQ {qq} 退群，自动加入黑名单并移除白名单')
+    
+    # 自动加入黑名单
+    bound_manager.add_blacklist(qq)
+    
+    # 移除白名单（但保留绑定记录）
+    await bound_manager.remove_whitelist(qq, remove_binding=False)
 
-
-@matcher.handle()
-async def watch_increase(event: GroupIncreaseNoticeEvent):
-    await matcher.finish('欢迎加入群聊！请仔细阅读群聊公告，并按照要求进行操作。', at_sender=True)
-
-
-@matcher.handle()
-async def watch_poke(event: PokeNotifyEvent):
-    if not event.is_tome():
-        return None
-    sentence = await request('https://v1.jinrishici.com/all.json')
-    message = turn_message(poke_handler(sentence))
-    await matcher.finish(message)
-
-
-def poke_handler(sentence):
-    now = datetime.now()
-    yield F'{now.strftime("%Y-%m-%d")} 星期{week_mapping[now.weekday()]}  {now.strftime("%H:%M:%S")}'
-    if sentence is not None:
-        yield F'\n「{sentence["content"]}」'
-        yield F'               —— {sentence["author"]}《{sentence["origin"]}》'

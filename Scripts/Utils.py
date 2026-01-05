@@ -1,116 +1,66 @@
+"""
+工具函数
+"""
 import binascii
-import inspect
-import os
-import re
-from base64 import b64decode, b64encode
-from collections.abc import Iterable
+from base64 import b64encode, b64decode
 from json import dumps, loads
-from pathlib import Path
-from threading import Timer
-
-from nonebot import get_bot
-from nonebot.adapters.onebot.v11 import Event, Message, MessageEvent
-from nonebot.exception import ActionFailed, NetworkError
+from typing import Any
 from nonebot.log import logger
-from uvicorn.server import Server
+from nonebot.permission import Permission
+from nonebot.adapters.onebot.v11 import MessageEvent, GroupMessageEvent
 
 from .Config import config
 
-regex = re.compile(R'[A-Z0-9_]+|\.[A-Z0-9_]+', re.IGNORECASE)
 
-
-def turn_message(iterator: Iterable) -> Message:
-    lines = tuple(iterator)
-    return Message('\n'.join(lines))
-
-
-def check_player(player: str):
-    if len(player) > 16:
-        return False
-    return get_player_name(player) == player
-
-
-def check_message(message: str):
-    # 返回是否含有违禁词
-    return any(word in message for word in config.sync_sensitive_words)
-
-
-def get_args(args: Message):
-    result = []
-    for segment in args:
-        if segment.type == 'text':
-            for arg in segment.data['text'].split(' '):
-                arg and result.append(arg)
-        elif segment.type == 'at':
-            result.append(str(segment.data['qq']))
-    logger.debug(F'从 {args} 中提取参数 {result} 完毕。')
-    return result
-
-
-def get_player_name(name):
-    if result := regex.search(name):
-        return result.group()
-
-
-def get_permission(event: MessageEvent):
-    return (str(event.user_id) in config.superusers) or (
-            config.admin_superusers and event.sender.role in ('admin', 'owner')
-    )
-
-
-def restart():
-    frames = inspect.getouterframes(inspect.currentframe())
-    servers = (info.frame.f_locals.get('server') for info in frames[::-1])
-    server = next(server for server in servers if isinstance(server, Server))
-
-    def core():
-        file = Path('Bot.py').absolute()
-        os.system(f'start python {file}')
-        server.should_exit = True
-
-    if os.name == 'nt':
-        timer = Timer(2, core)
-        timer.start()
-        return True
-    return False
-
-
-async def get_user_name(group: int, user: int):
+def decode_header(string: str) -> dict[str, Any] | None:
+    """Base64解码（用于HTTP header）"""
     try:
-        bot = get_bot()
-        response = await bot.get_group_member_info(group_id=group, user_id=user)
-    except (NetworkError, ActionFailed, ValueError):
-        return None
-    return response.get('card') or response.get('nickname')
-
-
-class Json:
-    @staticmethod
-    def encode(data: dict):
-        # 编码
-        string = dumps(data, ensure_ascii=False)
-        string = b64encode(string.encode('Utf-8'))
-        return string.decode('Utf-8')
-
-    @staticmethod
-    def decode(string: str):
-        try:
-            string = b64decode(string.encode('Utf-8'))
-        except binascii.Error:
-            logger.warning(f'无法解码字符串 {string}')
-            return None
+        string = b64decode(string.encode('Utf-8'))
         return loads(string.decode('Utf-8'))
+    except (binascii.Error, Exception) as e:
+        logger.warning(f'Header解码失败: {e}')
+        return None
 
 
-class Rules:
-    @staticmethod
-    def message_rule(event: Event):
-        if hasattr(event, 'group_id'):
-            return event.group_id in config.message_groups
-        return True
+async def has_group_member_permission(event: GroupMessageEvent) -> bool:
+    """主群成员权限（主群成员可以使用）"""
+    # 检查是否在主群中
+    return event.group_id in config.target_qq_groups
 
-    @staticmethod
-    def command_rule(event: Event):
-        if hasattr(event, 'group_id'):
-            return event.group_id in config.command_groups
-        return True
+async def has_sync_group_member_permission(event: GroupMessageEvent) -> bool:
+    """同步群成员权限（同步群成员可以使用）"""
+    return event.group_id == config.sync_qq_group
+
+async def has_community_admin_permission(event: GroupMessageEvent) -> bool:
+    """社区管理员权限（可以管理绑定、白名单、黑名单）"""
+    # 检查群管理员权限（仅限群消息，且需要是主群）
+    if not config.enable_group_admin_as_community_admin:
+        return False
+    # 检查是否在主群中
+    if event.group_id  not in config.target_qq_groups:
+        return False
+
+    return event.sender.role in ('admin', 'owner')
+
+
+async def has_mc_server_admin_permission(event: GroupMessageEvent) -> bool:
+    """MC服务端管理员权限（可以执行cmd命令）"""
+    user_id = str(event.user_id)
+    
+    # 检查MC服务端管理员
+    return user_id in config.mc_server_admins
+
+
+async def has_host_admin_permission(event: GroupMessageEvent) -> bool:
+    """主机管理员权限（可以执行shell命令）"""
+    user_id = str(event.user_id)
+    return user_id in config.host_admins
+
+
+# 全局权限实例
+GROUP_MEMBER_PERMISSION = Permission(has_group_member_permission)
+SYNC_GROUP_MEMBER_PERMISSION = Permission(has_sync_group_member_permission)
+COMMUNITY_ADMIN_PERMISSION = Permission(has_community_admin_permission, has_mc_server_admin_permission, has_host_admin_permission) # 主机管理员和MC服务端管理员的权限也包含社区管理员权限
+MC_SERVER_ADMIN_PERMISSION = Permission(has_mc_server_admin_permission, has_host_admin_permission) # 主机管理员的权限也包含MC服务端管理员权限
+HOST_ADMIN_PERMISSION = Permission(has_host_admin_permission) 
+
