@@ -3,8 +3,9 @@
 """
 import asyncio
 import json
+import re
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict
 from pydantic import BaseModel, ValidationError
 from nonebot.log import logger
 
@@ -21,12 +22,17 @@ class PlayerBindings(BaseModel):
 
 class BoundData(BaseModel):
     """绑定数据模型"""
-    bounds: dict[str, PlayerBindings] = {}
+    # GroupID -> QQ -> Bindings
+    bounds: Dict[str, Dict[str, PlayerBindings]] = {}
     blacklist: list[str] = []
 
 
 class BoundManager:
     """绑定管理器"""
+    
+    # ID校验正则
+    JAVA_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_]{3,16}$")
+    BEDROCK_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_][a-zA-Z0-9_ ]{1,14}[a-zA-Z0-9_]$")
     
     def __init__(self):
         self.data_path = Path('./Data/Player.json')
@@ -36,13 +42,26 @@ class BoundManager:
     @staticmethod
     def escape_player_id(player_id: str) -> str:
         """转义玩家ID用于命令（处理空格和特殊字符）"""
-        # 如果包含空格或特殊字符，用引号包裹
         if ' ' in player_id or any(c in player_id for c in ['"', "'", '\\', '$', '`']):
-            # 转义引号，然后用引号包裹
             escaped = player_id.replace('"', '\\"')
             return f'"{escaped}"'
         return player_id
+
+    @staticmethod
+    def bedrock_to_java_id(bedrock_id: str) -> str:
+        """基岩版ID转Java版ID (Offline Geyser)"""
+        # 将空格替换为下划线, 在头部添加".", 然后截断到16个字符
+        new_id = "." + bedrock_id.replace(" ", "_")
+        return new_id[:16]
     
+    def validate_id(self, player_id: str, version: str) -> bool:
+        """校验玩家ID格式"""
+        if version == 'java':
+            return bool(self.JAVA_ID_PATTERN.match(player_id))
+        elif version == 'bedrock':
+            return bool(self.BEDROCK_ID_PATTERN.match(player_id))
+        return False
+
     def _load(self):
         """加载数据"""
         if not self.data_path.exists():
@@ -52,7 +71,27 @@ class BoundManager:
         try:
             with open(self.data_path, 'r', encoding='utf-8') as f:
                 raw_data = json.load(f)
-                self.data = BoundData(**raw_data)
+                
+            # 数据迁移：如果bounds是直接的QQ->Bindings，说明是旧数据
+            # 检查raw_data['bounds']的第一个值
+            if 'bounds' in raw_data and raw_data['bounds']:
+                first_key = next(iter(raw_data['bounds']))
+                first_val = raw_data['bounds'][first_key]
+                # 旧数据：values是{'bedrock': [], 'java': []}
+                # 新数据：values是 Dict[qq, Bindings]
+                # 简单判断：看key是不是QQ号（通常长度较长），但群号也是数字。
+                # 更准确：看value结构。旧版value有bedrock/java字段。
+                if 'bedrock' in first_val or 'java' in first_val:
+                    logger.info("检测到旧版绑定数据，正在迁移到群组 711159914...")
+                    old_bounds = raw_data['bounds']
+                    new_bounds = {"711159914": old_bounds}
+                    raw_data['bounds'] = new_bounds
+                    # 立即保存迁移后的结构
+                    self.data = BoundData(**raw_data)
+                    self.save()
+                    return
+
+            self.data = BoundData(**raw_data)
         except (json.JSONDecodeError, ValidationError, OSError) as e:
             logger.error(f'加载绑定数据失败: {e}')
             self.data = BoundData()
@@ -66,94 +105,76 @@ class BoundManager:
         except OSError as e:
             logger.error(f'保存绑定数据失败: {e}')
     
-    def is_blacklisted(self, qq: str) -> bool:
-        """检查是否在黑名单中"""
-        return qq in self.data.blacklist
+    def get_group_bindings(self, group_id: str) -> Dict[str, PlayerBindings]:
+        """获取指定群的所有绑定"""
+        return self.data.bounds.get(str(group_id), {})
+
+    def get_bindings(self, qq: str, group_id: str) -> PlayerBindings:
+        """获取QQ在指定群的绑定"""
+        group_bindings = self.get_group_bindings(str(group_id))
+        return group_bindings.get(str(qq), PlayerBindings())
     
-    def add_blacklist(self, qq: str):
-        """添加黑名单"""
-        if qq not in self.data.blacklist:
-            self.data.blacklist.append(qq)
-            self.save()
-            logger.info(f'已将QQ {qq} 加入黑名单')
-    
-    def remove_blacklist(self, qq: str):
-        """移除黑名单"""
-        if qq in self.data.blacklist:
-            self.data.blacklist.remove(qq)
-            self.save()
-            logger.info(f'已将QQ {qq} 从黑名单移除')
-    
-    def get_bound_count(self, qq: str) -> int:
+    def get_bound_count(self, qq: str, group_id: str) -> int:
         """获取绑定数量"""
-        if qq not in self.data.bounds:
-            return 0
-        bindings = self.data.bounds[qq]
+        bindings = self.get_bindings(qq, group_id)
         return len(bindings.bedrock) + len(bindings.java)
     
-    def can_bind(self, qq: str) -> bool:
+    def can_bind(self, qq: str, group_id: str) -> bool:
         """检查是否可以绑定"""
-        if self.is_blacklisted(qq):
-            return False
-        return self.get_bound_count(qq) < config.max_bindings_per_qq
+        return self.get_bound_count(qq, group_id) < config.max_bindings_per_qq
     
-    async def add_binding(self, qq: str, player_id: str, version: str):
-        """添加绑定（version: 'bedrock' 或 'java'），如果不在黑名单则自动加白名单"""
-        if qq not in self.data.bounds:
-            self.data.bounds[qq] = PlayerBindings()
+    async def add_binding(self, qq: str, player_id: str, version: str, group_id: str):
+        """添加绑定（version: 'bedrock' 或 'java'），并同步白名单"""
+        group_id = str(group_id)
+        qq = str(qq)
         
-        bindings = self.data.bounds[qq]
+        if group_id not in self.data.bounds:
+            self.data.bounds[group_id] = {}
+            
+        group_bindings = self.data.bounds[group_id]
+        if qq not in group_bindings:
+            group_bindings[qq] = PlayerBindings()
+        
+        bindings = group_bindings[qq]
         target_list = bindings.bedrock if version == 'bedrock' else bindings.java
         
         if player_id not in target_list:
             target_list.append(player_id)
             self.save()
-            logger.info(f'QQ {qq} 绑定{version}玩家 {player_id}')
-            
-            # 如果用户不在黑名单，自动加白名单
-            if not self.is_blacklisted(qq):
-                await self.add_whitelist(player_id, version)
+            logger.info(f'群 {group_id} QQ {qq} 绑定{version}玩家 {player_id}')
+            await self.add_whitelist(player_id, version, group_id)
     
-    async def remove_binding(self, qq: str, player_id: Optional[str] = None, version: Optional[str] = None):
+    async def remove_binding(self, qq: str, group_id: str):
         """移除绑定，同时移除对应的白名单"""
-        if qq not in self.data.bounds:
-            return
+        group_id = str(group_id)
+        qq = str(qq)
+        bindings = self.get_bindings(qq, group_id)
         
-        bindings = self.data.bounds[qq]
+        # 移除基岩版白名单
+        tasks = []
+        for player_id in bindings.bedrock:
+            tasks.append(self.remove_whitelist(player_id, 'bedrock', group_id))
         
-        if player_id and version:
-            # 移除特定绑定
-            target_list = bindings.bedrock if version == 'bedrock' else bindings.java
-            if player_id in target_list:
-                # 先移除白名单
-                await self.remove_whitelist_by_player(player_id, version)
-                # 再移除绑定记录
-                target_list.remove(player_id)
-                self.save()
-                logger.info(f'移除QQ {qq} 的{version}玩家 {player_id} 绑定')
-        else:
-            # 移除所有绑定
-            # 先移除所有白名单
-            await self.remove_whitelist(qq, remove_binding=False)
-            # 再移除绑定记录
-            del self.data.bounds[qq]
+        # 移除Java版白名单
+        for player_id in bindings.java:
+            tasks.append(self.remove_whitelist(player_id, 'java', group_id))
+        
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+        # 移除绑定记录
+        group_bindings = self.get_group_bindings(group_id)
+        if qq in group_bindings:
+            del group_bindings[qq]
             self.save()
-            logger.info(f'移除QQ {qq} 的所有绑定')
+            logger.info(f'群 {group_id} 移除QQ {qq} 的所有绑定')
     
-    def get_bindings(self, qq: str) -> PlayerBindings:
-        """获取QQ的所有绑定"""
-        return self.data.bounds.get(qq, PlayerBindings())
-    
-    def is_player_id_occupied(self, player_id: str, version: str, exclude_qq: Optional[str] = None) -> Optional[str]:
-        """检查玩家ID是否已被占用
-        返回占用该ID的QQ号，如果未被占用则返回None
-        version: 'bedrock' 或 'java'
-        exclude_qq: 排除的QQ号（用于检查自己是否已绑定该ID）
-        """
-        target_list_name = 'bedrock' if version == 'bedrock' else 'java'
+    def is_player_id_occupied(self, player_id: str, version: str, group_id: str, exclude_qq: Optional[str] = None) -> Optional[str]:
+        """检查玩家ID是否已被占用 (在当前群)"""
+        group_bindings = self.get_group_bindings(str(group_id))
         
-        for qq, bindings in self.data.bounds.items():
-            if exclude_qq and qq == exclude_qq:
+        for qq, bindings in group_bindings.items():
+            if exclude_qq and str(qq) == str(exclude_qq):
                 continue
             
             target_list = bindings.bedrock if version == 'bedrock' else bindings.java
@@ -162,78 +183,95 @@ class BoundManager:
         
         return None
     
-    async def sync_whitelist(self, player_id: str, version: str):
-        """同步白名单"""
-        import subprocess
-        import sys
-        # $ syncwhitelist
-        process = subprocess.run(
-            ['syncwhitelist'],
-            stdout=sys.stdout,
-            stderr=sys.stderr,
-            shell=True
-        )
-        return process.returncode == 0
-    
-    async def add_whitelist(self, player_id: str, version: str):
-        """添加白名单（version: 'bedrock' 或 'java'）"""
-        tasks = []
-        # 转义玩家ID以处理空格和特殊字符
-        escaped_player_id = self.escape_player_id(player_id)
-        command = f'{config.bedrock_whitelist_command} add {escaped_player_id}' if version == 'bedrock' else f'{config.java_whitelist_command} add {escaped_player_id}'
-        
-        for name, conn in connection_manager.connections.items():
-            if conn.status:
-                tasks.append(conn.send(EventType.COMMAND, command))
-        
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
-        
-        # 同步白名单
-        await self.sync_whitelist(player_id, version)
-    
-    async def remove_whitelist_by_player(self, player_id: str, version: str):
-        """移除特定玩家的白名单（version: 'bedrock' 或 'java'）"""
-        tasks = []
-        # 转义玩家ID以处理空格和特殊字符
-        escaped_player_id = self.escape_player_id(player_id)
-        command = f'{config.bedrock_whitelist_command} remove {escaped_player_id}' if version == 'bedrock' else f'{config.java_whitelist_command} remove {escaped_player_id}'
-        
-        for name, conn in connection_manager.connections.items():
-            if conn.status:
-                tasks.append(conn.send(EventType.COMMAND, command))
-        
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
-    
-    async def remove_whitelist(self, qq: str, remove_binding: bool = False):
-        """移除QQ绑定的所有白名单"""
-        bindings = self.get_bindings(qq)
-        
-        # 移除基岩版白名单
-        tasks = []
-        for player_id in bindings.bedrock:
-            # 转义玩家ID以处理空格和特殊字符
-            escaped_player_id = self.escape_player_id(player_id)
-            for name, conn in connection_manager.connections.items():
-                if conn.status:
-                    tasks.append(conn.send(EventType.COMMAND, f'{config.bedrock_whitelist_command} remove {escaped_player_id}'))
-        
-        # 移除Java版白名单
-        for player_id in bindings.java:
-            # 转义玩家ID以处理空格和特殊字符
-            escaped_player_id = self.escape_player_id(player_id)
-            for name, conn in connection_manager.connections.items():
-                if conn.status:
-                    tasks.append(conn.send(EventType.COMMAND, f'{config.java_whitelist_command} remove {escaped_player_id}'))
-        
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
-        
-        # 可选：移除绑定记录（退群时不移除，拉黑时移除）
-        if remove_binding:
-            await self.remove_binding(qq)
+    def _format_command(self, template: str, java_id: str, bedrock_id: str) -> str:
+        """格式化命令"""
+        bedrock_id_to_java = self.bedrock_to_java_id(bedrock_id)
+        # 简单的替换
+        cmd = template.replace("{java_id}", java_id)
+        cmd = cmd.replace("{bedrock_id}", bedrock_id)
+        cmd = cmd.replace("{bedrock_id_to_java_id}", bedrock_id_to_java)
+        return cmd
 
+    async def add_whitelist(self, player_id: str, version: str, group_id: str):
+        """添加白名单"""
+        group_id = str(group_id)
+        if group_id not in config.group_servers:
+            logger.warning(f"群 {group_id} 未配置服务器，无法添加白名单")
+            return
+
+        tasks = []
+        servers_config = config.group_servers[group_id]
+        
+        # 准备ID
+        java_id = player_id
+        bedrock_id = player_id
+        
+        for server_name, server_conf in servers_config.items():
+            conn = connection_manager.get(server_name)
+            if not conn or not conn.status:
+                continue
+            
+            # 根据版本选择命令模板
+            cmd_template = ""
+            if version == 'bedrock':
+                cmd_template = server_conf.bedrock_whitelist_command
+            else:
+                cmd_template = server_conf.java_whitelist_command
+            
+            final_cmd = cmd_template.replace("{java_id}", player_id) \
+                                    .replace("{bedrock_id}", player_id) \
+                                    .replace("{bedrock_id_to_java_id}", self.bedrock_to_java_id(player_id))
+            
+            tasks.append(conn.send(EventType.COMMAND, final_cmd))
+        
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def remove_whitelist(self, player_id: str, version: str, group_id: str):
+        """移除白名单"""
+        group_id = str(group_id)
+        if group_id not in config.group_servers:
+            return
+
+        tasks = []
+        servers_config = config.group_servers[group_id]
+        
+        for server_name, server_conf in servers_config.items():
+            conn = connection_manager.get(server_name)
+            if not conn or not conn.status:
+                continue
+            
+            # 尝试从添加命令推导移除命令
+            cmd_template = ""
+            if version == 'bedrock':
+                cmd_template = server_conf.bedrock_whitelist_command
+            else:
+                cmd_template = server_conf.java_whitelist_command
+            
+            # 推导逻辑:
+            # 1. 如果包含 " add "，替换为 " remove "
+            # 2. 如果不包含 " add "，但在开头是 "whitelist" 或 "easywhitelist" 或 "fwhitelist"，则插入 " remove"
+            
+            remove_cmd = ""
+            if " add " in cmd_template:
+                remove_cmd = cmd_template.replace(" add ", " remove ")
+            else:
+                # 尝试智能插入
+                first_word = cmd_template.split(' ')[0]
+                if first_word in ['whitelist', 'easywhitelist', 'fwhitelist', 'lp']:
+                     remove_cmd = cmd_template.replace(first_word, f"{first_word} remove", 1)
+                else:
+                    # 无法推导，默认尝试在命令词后加 remove
+                    # 比如 "mycmd {id}" -> "mycmd remove {id}"
+                    remove_cmd = cmd_template.replace(first_word, f"{first_word} remove", 1)
+
+            final_cmd = remove_cmd.replace("{java_id}", player_id) \
+                                  .replace("{bedrock_id}", player_id) \
+                                  .replace("{bedrock_id_to_java_id}", self.bedrock_to_java_id(player_id))
+            
+            tasks.append(conn.send(EventType.COMMAND, final_cmd))
+        
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
 bound_manager = BoundManager()
-

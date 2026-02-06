@@ -10,14 +10,14 @@ from nonebot.log import logger
 from Scripts.Utils import HOST_ADMIN_PERMISSION
 
 
-matcher = on_regex(r'(?s)^#shell\s+(?P<command>.*)$', priority=10, block=True, permission=HOST_ADMIN_PERMISSION)
+matcher = on_regex(r'(?s)^#shell\s+(?P<command>.*)$', priority=9, block=True, permission=HOST_ADMIN_PERMISSION)
 
 
 @matcher.handle()
 async def handle_shell(event: MessageEvent):
     """处理shell命令"""
     
-    message_text = str(event.message).strip()
+    message_text = str(event.get_plaintext()).strip()
     match = re.match(r'(?s)^#shell\s+(?P<command>.*)$', message_text)
     if not match:
         await matcher.finish('命令格式错误！')

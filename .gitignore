@@ -8,3 +8,6 @@ Test.py
 .vscode/settings.json
 .venv/
 /Logs
+/Data
+/Tmp
+*.bak
