@@ -2,8 +2,7 @@
 双向同步聊天群插件 - 监听聊天群消息并转发到所有服务器
 """
 
-import re
-
+import re, json
 from nonebot import on_message, get_bot
 from nonebot.adapters.onebot.v11 import GroupMessageEvent
 from nonebot.adapters.onebot.v11.utils import unescape
@@ -42,22 +41,21 @@ async def convert_cq_code(kwargs: dict, event: GroupMessageEvent) -> str:
         return f"@{nickname}"
 
     elif cq_type == "image":
-        return "[图片]"
         url = kwargs.get("url", "")
-        summary = kwargs.get("summary", "").replace("[", "").replace("]", "")
         filename = kwargs.get("file", "")
-        name = summary or filename
-        return f"[[CICode,url={url},name={name}]]"
+        summary = kwargs.get("summary", filename).replace("[", "").replace("]", "")
+        return f"[{summary}]"
+        return f"[[CICode,url={url},name={summary}]]"
 
     elif cq_type == "face":
         # [face:id=264,raw={'faceIndex': 264, 'faceText': '/捂脸', 'faceType': 2, 'packId': None...]"
-        face_text = (
-            kwargs.get("raw", "faceText': '/喵'")
-        )
+        face_text = kwargs.get("raw", "faceText': '/喵'")
         match = re.search(r"faceText':\s*'/([^']+)'", face_text)
         if match:
             return f"[{match.group(1)}]"
         return "[未知]"
+    elif cq_type == "json":
+        return json.loads(kwargs.get("data", "{}")).get("prompt", "卡片消息")
     else:
         return f"[{cq_type}]"
 
@@ -126,7 +124,7 @@ async def handle_message(event: GroupMessageEvent) -> str:
 async def handle_sync_group_message(event: GroupMessageEvent):
     """处理聊天群消息，转发到所有服务器"""
     group_id = str(event.group_id)
-    
+
     # 检查是否是配置了服务器的群组
     if group_id not in config.group_servers:
         return
@@ -149,4 +147,6 @@ async def handle_sync_group_message(event: GroupMessageEvent):
     )
 
     # 转发到该群组绑定的所有服务器 (broadcast 会再次检查 enable_sync_group_player_chat)
-    await server_manager.broadcast("QQ群", player=sender_name, message=message_text, group_id=group_id)
+    await server_manager.broadcast(
+        "QQ群", player=sender_name, message=message_text, group_id=group_id
+    )
