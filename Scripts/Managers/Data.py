@@ -22,24 +22,7 @@ class DataManager:
             try:
                 with open(self.data_path, 'r', encoding='utf-8') as f:
                     raw_data = json.load(f)
-                
-                # 检查是否是旧格式（列表）
-                if isinstance(raw_data, list):
-                    logger.warning("检测到旧版服务器列表配置，正在迁移...")
-                    # 尝试迁移到第一个目标群，或者默认群
-                    target_group = str(config.target_qq_groups[0]) if config.target_qq_groups else "711159914"
-                    
-                    new_config = {target_group: {}}
-                    for server_name in raw_data:
-                        new_config[target_group][server_name] = ServerDetailConfig().model_dump()
-                    
-                    # 更新全局配置
-                    self._update_config(new_config)
-                    # 立即保存新格式
-                    self.save()
-                elif isinstance(raw_data, dict):
-                    # 新格式
-                    self._update_config(raw_data)
+                self._update_config(raw_data)
                 
             except Exception as e:
                 logger.error(f'加载数据失败: {e}')

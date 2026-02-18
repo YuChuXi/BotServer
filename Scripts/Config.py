@@ -6,8 +6,8 @@ from typing import Dict, List, Optional
 
 class ServerDetailConfig(BaseModel):
     """单个服务器的配置"""
-    java_whitelist_command: str = 'whitelist "{java_id}"'
-    bedrock_whitelist_command: str = 'fwhitelist "{bedrock_id}"'
+    java_whitelist_command: str = 'whitelist {action} "{java_id}"'
+    bedrock_whitelist_command: str = 'fwhitelist {action} "{bedrock_id}"'
     enable_game_to_qq_sync: bool = True
     enable_sync_group_server_startup: bool = True
     enable_sync_group_server_shutdown: bool = True

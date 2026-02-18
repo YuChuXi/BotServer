@@ -71,26 +71,6 @@ class BoundManager:
         try:
             with open(self.data_path, 'r', encoding='utf-8') as f:
                 raw_data = json.load(f)
-                
-            # 数据迁移：如果bounds是直接的QQ->Bindings，说明是旧数据
-            # 检查raw_data['bounds']的第一个值
-            if 'bounds' in raw_data and raw_data['bounds']:
-                first_key = next(iter(raw_data['bounds']))
-                first_val = raw_data['bounds'][first_key]
-                # 旧数据：values是{'bedrock': [], 'java': []}
-                # 新数据：values是 Dict[qq, Bindings]
-                # 简单判断：看key是不是QQ号（通常长度较长），但群号也是数字。
-                # 更准确：看value结构。旧版value有bedrock/java字段。
-                if 'bedrock' in first_val or 'java' in first_val:
-                    logger.info("检测到旧版绑定数据，正在迁移到群组 711159914...")
-                    old_bounds = raw_data['bounds']
-                    new_bounds = {"711159914": old_bounds}
-                    raw_data['bounds'] = new_bounds
-                    # 立即保存迁移后的结构
-                    self.data = BoundData(**raw_data)
-                    self.save()
-                    return
-
             self.data = BoundData(**raw_data)
         except (json.JSONDecodeError, ValidationError, OSError) as e:
             logger.error(f'加载绑定数据失败: {e}')
@@ -142,7 +122,7 @@ class BoundManager:
             target_list.append(player_id)
             self.save()
             logger.info(f'群 {group_id} QQ {qq} 绑定{version}玩家 {player_id}')
-            await self.add_whitelist(player_id, version, group_id)
+            await self.execute_whitelist_command(player_id, version, group_id, 'add')
     
     async def remove_binding(self, qq: str, group_id: str):
         """移除绑定，同时移除对应的白名单"""
@@ -153,11 +133,11 @@ class BoundManager:
         # 移除基岩版白名单
         tasks = []
         for player_id in bindings.bedrock:
-            tasks.append(self.remove_whitelist(player_id, 'bedrock', group_id))
+            tasks.append(self.execute_whitelist_command(player_id, 'bedrock', group_id, 'remove'))
         
         # 移除Java版白名单
         for player_id in bindings.java:
-            tasks.append(self.remove_whitelist(player_id, 'java', group_id))
+            tasks.append(self.execute_whitelist_command(player_id, 'java', group_id, 'remove'))
         
         if tasks:
             await asyncio.gather(*tasks, return_exceptions=True)
@@ -183,28 +163,18 @@ class BoundManager:
         
         return None
     
-    def _format_command(self, template: str, java_id: str, bedrock_id: str) -> str:
-        """格式化命令"""
-        bedrock_id_to_java = self.bedrock_to_java_id(bedrock_id)
-        # 简单的替换
-        cmd = template.replace("{java_id}", java_id)
-        cmd = cmd.replace("{bedrock_id}", bedrock_id)
-        cmd = cmd.replace("{bedrock_id_to_java_id}", bedrock_id_to_java)
-        return cmd
-
-    async def add_whitelist(self, player_id: str, version: str, group_id: str):
-        """添加白名单"""
+    async def execute_whitelist_command(self, player_id: str, version: str, group_id: str, action: str):
+        """
+        执行白名单命令
+        :param action: 'add' or 'remove'
+        """
         group_id = str(group_id)
         if group_id not in config.group_servers:
-            logger.warning(f"群 {group_id} 未配置服务器，无法添加白名单")
+            logger.warning(f"群 {group_id} 未配置服务器，无法执行白名单操作")
             return
 
         tasks = []
         servers_config = config.group_servers[group_id]
-        
-        # 准备ID
-        java_id = player_id
-        bedrock_id = player_id
         
         for server_name, server_conf in servers_config.items():
             conn = connection_manager.get(server_name)
@@ -218,56 +188,12 @@ class BoundManager:
             else:
                 cmd_template = server_conf.java_whitelist_command
             
-            final_cmd = cmd_template.replace("{java_id}", player_id) \
+            # 使用 {action} 占位符进行替换
+            # 同时兼容没有 {action} 占位符的情况（虽然按新规应该都有）
+            final_cmd = cmd_template.replace("{action}", action) \
+                                    .replace("{java_id}", player_id) \
                                     .replace("{bedrock_id}", player_id) \
                                     .replace("{bedrock_id_to_java_id}", self.bedrock_to_java_id(player_id))
-            
-            tasks.append(conn.send(EventType.COMMAND, final_cmd))
-        
-        if tasks:
-            await asyncio.gather(*tasks, return_exceptions=True)
-
-    async def remove_whitelist(self, player_id: str, version: str, group_id: str):
-        """移除白名单"""
-        group_id = str(group_id)
-        if group_id not in config.group_servers:
-            return
-
-        tasks = []
-        servers_config = config.group_servers[group_id]
-        
-        for server_name, server_conf in servers_config.items():
-            conn = connection_manager.get(server_name)
-            if not conn or not conn.status:
-                continue
-            
-            # 尝试从添加命令推导移除命令
-            cmd_template = ""
-            if version == 'bedrock':
-                cmd_template = server_conf.bedrock_whitelist_command
-            else:
-                cmd_template = server_conf.java_whitelist_command
-            
-            # 推导逻辑:
-            # 1. 如果包含 " add "，替换为 " remove "
-            # 2. 如果不包含 " add "，但在开头是 "whitelist" 或 "easywhitelist" 或 "fwhitelist"，则插入 " remove"
-            
-            remove_cmd = ""
-            if " add " in cmd_template:
-                remove_cmd = cmd_template.replace(" add ", " remove ")
-            else:
-                # 尝试智能插入
-                first_word = cmd_template.split(' ')[0]
-                if first_word in ['whitelist', 'easywhitelist', 'fwhitelist', 'lp']:
-                     remove_cmd = cmd_template.replace(first_word, f"{first_word} remove", 1)
-                else:
-                    # 无法推导，默认尝试在命令词后加 remove
-                    # 比如 "mycmd {id}" -> "mycmd remove {id}"
-                    remove_cmd = cmd_template.replace(first_word, f"{first_word} remove", 1)
-
-            final_cmd = remove_cmd.replace("{java_id}", player_id) \
-                                  .replace("{bedrock_id}", player_id) \
-                                  .replace("{bedrock_id_to_java_id}", self.bedrock_to_java_id(player_id))
             
             tasks.append(conn.send(EventType.COMMAND, final_cmd))
         
