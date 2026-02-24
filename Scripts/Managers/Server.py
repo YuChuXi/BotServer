@@ -2,7 +2,7 @@
 服务器管理器 - 使用事件路由和并发处理
 """
 import asyncio
-from typing import Union, Optional, Callable, Any, List
+from typing import Union, Optional, Callable, Any, List, Dict
 from nonebot.log import logger
 
 from ..Core.Connection import connection_manager
@@ -53,6 +53,88 @@ class ServerManager:
             return config.group_servers[group_id].get(server_name)
         return None
 
+    @staticmethod
+    def _is_whitelist_response_ok(data: Any) -> bool:
+        """根据游戏服返回内容判断白名单命令是否执行成功。"""
+        if data is None:
+            return False
+        if isinstance(data, list):
+            data = ' '.join(str(x) for x in data)
+        text = (data if isinstance(data, str) else str(data)).strip().lower()
+        if not text:
+            return False
+        fail_markers = ('does not exist', 'unknown command', 'failed', 'could not', 'error', '失败', '不存在', '未知命令')
+        if any(m in text for m in fail_markers):
+            return False
+        success_markers = ('added', 'removed', 'already on the whitelist', 'already in the whitelist', '从白名单', '加入白名单', '已在白名单')
+        if any(m in text for m in success_markers):
+            return True
+        return True
+
+    async def execute_whitelist(
+        self,
+        group_id: str,
+        player_id: str,
+        version: str,
+        action: str,
+        bedrock_id_to_java_id: Callable[[str], str],
+    ) -> Dict[str, List[str]]:
+        """
+        在指定群组下的各服务器执行白名单命令（add/remove）。
+        命令模板、连接、发送、响应判断均在服务器抽象内完成。
+        返回 {'success': [...], 'failed': [...], 'skipped': [...]} 服务器名称列表。
+        """
+        result: Dict[str, List[str]] = {'success': [], 'failed': [], 'skipped': []}
+        group_id = str(group_id)
+        if group_id not in config.group_servers:
+            return result
+        servers_config = config.group_servers[group_id]
+        timeout = 5.0
+
+        async def run_one(server_name: str, conn: Any, command: str) -> tuple:
+            fut = asyncio.get_event_loop().create_future()
+            async def on_response(data: Any):
+                if not fut.done():
+                    fut.set_result(data)
+            echo_id = event_router.request(on_response, timeout=timeout)
+            sent = await conn.send(EventType.COMMAND, command, echo=echo_id)
+            if not sent:
+                return (server_name, False)
+            try:
+                resp = await asyncio.wait_for(fut, timeout=timeout)
+                return (server_name, self._is_whitelist_response_ok(resp))
+            except (asyncio.TimeoutError, asyncio.CancelledError, Exception):
+                return (server_name, False)
+
+        pending: List[tuple] = []
+        for server_name, server_conf in servers_config.items():
+            conn = connection_manager.get(server_name)
+            if not conn or not conn.status:
+                result['skipped'].append(server_name)
+                continue
+            template = (
+                server_conf.bedrock_whitelist_command if version == 'bedrock'
+                else server_conf.java_whitelist_command
+            )
+            command = template.format(
+                action=action,
+                java_id=player_id,
+                bedrock_id=player_id,
+                bedrock_id_to_java_id=bedrock_id_to_java_id(player_id),
+            )
+            pending.append((server_name, conn, command))
+
+        if not pending:
+            return result
+
+        outcomes = await asyncio.gather(*[run_one(s, c, cmd) for s, c, cmd in pending])
+        for server_name, ok in outcomes:
+            if ok:
+                result['success'].append(server_name)
+            else:
+                result['failed'].append(server_name)
+        return result
+
     def get_groups_for_server(self, server_name: str) -> List[str]:
         """获取包含该服务器的所有群组ID"""
         groups = []
@@ -60,6 +142,16 @@ class ServerManager:
             if server_name in servers:
                 groups.append(group_id)
         return groups
+
+    def _responds_to_query(self, server_name: str, group_id: Optional[str] = None) -> bool:
+        """该服务器是否响应查服：未指定群时任意群配置为 True 即 True，指定群时只看该群配置"""
+        if group_id is not None:
+            conf = self.get_server_config(str(group_id), server_name)
+            return conf.enable_query if conf else True
+        for gid, servers in config.group_servers.items():
+            if server_name in servers and servers[server_name].enable_query:
+                return True
+        return False
 
     async def _request_all_servers(
         self,
@@ -138,23 +230,26 @@ class ServerManager:
         )
     
     async def get_player_list(self, group_id: Optional[str] = None) -> dict[str, list[str]]:
-        """并发获取服务器玩家列表，可指定群组"""
+        """并发获取服务器玩家列表，可指定群组；仅包含 enable_query 为 True 的服务器"""
         def update_player_list(server_name: str, data: list):
             if conn := connection_manager.get(server_name):
                 conn.player_list = data if data else []
-        
+
         targets = None
         if group_id:
             group_id = str(group_id)
             if group_id in config.group_servers:
-                targets = list(config.group_servers[group_id].keys())
+                targets = [n for n in config.group_servers[group_id] if self._responds_to_query(n, group_id)]
             else:
                 return {}
+        else:
+            filter_func = lambda name, _: self._responds_to_query(name)
 
         return await self._request_all_servers(
             EventType.PLAYER_LIST,
             callback_extra=update_player_list,
-            target_servers=targets
+            target_servers=targets,
+            filter_func=None if targets is not None else filter_func
         )
     
     async def get_server_occupation(self) -> dict[str, tuple[float, float]]:

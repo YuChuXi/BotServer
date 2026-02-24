@@ -31,42 +31,20 @@ async def startup():
 
 
 @driver.on_bot_connect
-async def on_bot_connect():
-    """Bot连接时启动称呼缓存更新任务"""
-    import asyncio
+async def on_bot_connect(bot):
     from Scripts.Managers import nickname_manager
-    from Scripts.Config import config
+    await nickname_manager.start_cache_task(bot)
 
-    # 合并目标群和同步群，去重
-    groups = list(config.target_qq_groups)
-    if config.sync_qq_group and config.sync_qq_group not in groups:
-        groups.append(config.sync_qq_group)
-    
-    if not groups:
-        logger.warning('没有配置需要更新称呼的群')
-        return
-    
-    async def update_nickname_cache_task():
-        """每5分钟从上游更新称呼缓存的后台任务"""
-        logger.info('称呼缓存更新任务已启动')
-        
-        while True:
-            try:
-                await nickname_manager.update_from_upstream(groups)
-            except Exception as e:
-                logger.error(f'称呼缓存更新任务出错: {e}')
-            
-            await asyncio.sleep(300)  # 等待5分钟
-    
-    # 启动后台任务
-    asyncio.create_task(update_nickname_cache_task())
 
+@driver.on_bot_disconnect
+async def on_bot_disconnect(bot):
+    from Scripts.Managers import nickname_manager
+    await nickname_manager.stop_cache_task(bot)
 
 
 @driver.on_shutdown
 async def shutdown():
     from Scripts.Managers import data_manager
-
     data_manager.save()
 
 
