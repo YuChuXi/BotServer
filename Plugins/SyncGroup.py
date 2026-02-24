@@ -42,7 +42,7 @@ async def convert_cq_code(kwargs: dict, event: GroupMessageEvent) -> str:
 
     elif cq_type == "image":
         url = kwargs.get("url", "")
-        filename = kwargs.get("file", "")
+        filename = kwargs.get("file", "图片")
         summary = kwargs.get("summary", filename).replace("[", "").replace("]", "")
         return f"[{summary}]"
         return f"[[CICode,url={url},name={summary}]]"
