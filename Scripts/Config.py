@@ -2,7 +2,7 @@ from nonebot import get_plugin_config
 from pydantic import BaseModel, Field
 import json
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 class ServerDetailConfig(BaseModel):
     """单个服务器的配置"""
@@ -16,6 +16,7 @@ class ServerDetailConfig(BaseModel):
     enable_sync_group_player_left: bool = False
     enable_sync_group_player_chat: bool = True
     enable_sync_group_player_death: bool = False
+    strip_minecraft_format: bool = False  # 服务端返回带 § 格式化代码的内容，需要清理（含命令返回等）
 
 class Config(BaseModel):
     """配置类"""
@@ -40,9 +41,6 @@ class Config(BaseModel):
     # 机器人配置
     bot_player_prefix: str = None
     
-    # 目标QQ群（用于自动添加服务器时的默认群组）
-    target_qq_groups: list[int] = [] 
-    
     # 双向同步聊天群号 (Deprecated: 现在使用 group_servers 里的配置)
     # 保留字段以防旧代码引用报错，但逻辑上已被 group_servers 替代
     sync_qq_group: int = 0
@@ -50,6 +48,14 @@ class Config(BaseModel):
     # 多群多服配置 (GroupId -> {ServerName -> Config})
     # 由 DataManager 加载和更新
     group_servers: Dict[str, Dict[str, ServerDetailConfig]] = Field(default_factory=dict)
+
+    def get_server_binding(self, server_name: str) -> Optional[Tuple[str, ServerDetailConfig]]:
+        """一服一群：返回 (group_id, config)，未配置则 None。"""
+        for gid, servers in self.group_servers.items():
+            if server_name in servers:
+                return (str(gid), servers[server_name])
+        return None
+
 
 config: Config = get_plugin_config(Config)
 

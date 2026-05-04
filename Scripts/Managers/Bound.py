@@ -10,7 +10,7 @@ from pydantic import BaseModel, ValidationError
 from nonebot.log import logger
 
 from ..Config import config
-from .Server import server_manager
+from .Server import server_manager, ServerPredicate
 
 
 class PlayerBindings(BaseModel):
@@ -38,21 +38,6 @@ class BoundManager:
         self.data: BoundData = BoundData()
         self._load()
     
-    @staticmethod
-    def escape_player_id(player_id: str) -> str:
-        """转义玩家ID用于命令（处理空格和特殊字符）"""
-        if ' ' in player_id or any(c in player_id for c in ['"', "'", '\\', '$', '`']):
-            escaped = player_id.replace('"', '\\"')
-            return f'"{escaped}"'
-        return player_id
-
-    @staticmethod
-    def bedrock_to_java_id(bedrock_id: str) -> str:
-        """基岩版ID转Java版ID (Offline Geyser)"""
-        # 将空格替换为下划线, 在头部添加".", 然后截断到16个字符
-        new_id = "." + bedrock_id.replace(" ", "_")
-        return new_id[:16]
-    
     def validate_id(self, player_id: str, version: str) -> bool:
         """校验玩家ID格式"""
         if version == 'java':
@@ -66,7 +51,6 @@ class BoundManager:
         if not self.data_path.exists():
             self.data = BoundData()
             return
-        
         try:
             with open(self.data_path, 'r', encoding='utf-8') as f:
                 raw_data = json.load(f)
@@ -142,9 +126,8 @@ class BoundManager:
             logger.info(f"群 {group_id} QQ {qq} 绑定{version}玩家 {player_id}")
         else:
             logger.info(f"群 {group_id} QQ {qq} 已绑定{version}玩家 {player_id}，重新同步白名单")
-        wl = await server_manager.execute_whitelist(
-            group_id, player_id, version, "add", self.bedrock_to_java_id
-        )
+        pred: ServerPredicate = lambda s: s.group_id == str(group_id)
+        wl = await server_manager.execute_whitelist(group_id, player_id, version, "add", pred)
         return ("new", wl) if is_new else ("resync", wl)
     
     @staticmethod
@@ -173,11 +156,12 @@ class BoundManager:
         qq = str(qq)
         bindings = self.get_bindings(qq, group_id)
 
+        pred: ServerPredicate = lambda s: s.group_id == str(group_id)
         tasks = [
-            server_manager.execute_whitelist(group_id, pid, 'bedrock', 'remove', self.bedrock_to_java_id)
+            server_manager.execute_whitelist(group_id, pid, 'bedrock', 'remove', pred)
             for pid in bindings.bedrock
         ] + [
-            server_manager.execute_whitelist(group_id, pid, 'java', 'remove', self.bedrock_to_java_id)
+            server_manager.execute_whitelist(group_id, pid, 'java', 'remove', pred)
             for pid in bindings.java
         ]
         results = await asyncio.gather(*tasks, return_exceptions=True) if tasks else []

@@ -7,7 +7,6 @@ from nonebot.exception import NetworkError, ActionFailed
 from nonebot.log import logger
 
 from .EventRouter import event_router
-from .Connection import connection_manager
 from .Message import EventType
 from ..Config import config, ServerDetailConfig
 from ..Managers import server_manager
@@ -29,33 +28,21 @@ def clean_message(message: str) -> str:
 
 
 async def broadcast_to_groups(
-    server_name: Optional[str], 
-    message_generator: Callable[[str], str], 
-    check_config: Callable[[ServerDetailConfig], bool]
+    server_name: Optional[str],
+    message_generator: Callable[[str], str],
+    check_config: Callable[[ServerDetailConfig], bool],
 ):
-    """
-    广播消息到该服务器所在的所有群组，根据配置决定是否发送
-    :param server_name: 服务器名称
-    :param message_generator: 生成消息的函数，接收 server_info 前缀
-    :param check_config: 检查配置的函数，接收 ServerDetailConfig
-    """
+    """一服一群：发到该服唯一群，由 check_config 决定是否发送。"""
     if not server_name:
         return
-
-    # 获取该服务器所属的所有群组
-    groups = server_manager.get_groups_for_server(server_name)
-    
-    for group_id in groups:
-        # 获取该群组下该服务器的配置
-        server_conf = server_manager.get_server_config(group_id, server_name)
-        if not server_conf:
-            continue
-            
-        # 检查配置开关
-        if check_config(server_conf):
-            server_info = f'[{server_name}] '
-            message = message_generator(server_info)
-            await send_group_message(int(group_id), message)
+    server = server_manager.get_server(server_name)
+    if not server or not server.get_group() or not server.config:
+        return
+    if not check_config(server.config):
+        return
+    server_info = f"[{server_name}] "
+    message = message_generator(server_info)
+    await send_group_message(int(server.group_id), message)
 
 
 # 注册所有事件处理器
@@ -66,7 +53,6 @@ def register_handlers():
         """处理来自服务器的消息（!!qq命令等），发送到该服务器所在的所有群"""
         if not data:
             return
-
         data = clean_message(data)
         
         # 定义消息生成器
@@ -133,7 +119,6 @@ def register_handlers():
         """处理玩家聊天"""
         player, chat_message = data
         logger.debug(F'玩家 {player} 在服务器 [{server_name}] 聊天: {chat_message}')
-        
         cleaned_msg = clean_message(chat_message)
         
         await broadcast_to_groups(

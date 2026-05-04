@@ -1,15 +1,12 @@
 """
 MCDR命令插件 - 在指定服务器执行MCDR命令
 """
-import asyncio
 import re
-from typing import Any
 from nonebot import on_regex
 from nonebot.adapters.onebot.v11 import MessageEvent
 from nonebot.log import logger
 
 from Scripts.Managers import server_manager
-from Scripts.Core.Message import EventType
 from Scripts.Utils import MC_SERVER_ADMIN_PERMISSION
 
 
@@ -36,8 +33,8 @@ async def handle_mcdr(event: MessageEvent):
     logger.info(f'用户 {event.user_id} 在服务器 {server_flag} 执行MCDR命令: {command}')
     
     if server_flag == '*':
-        # 执行到所有MCDR服务器
-        results = await server_manager.execute_mcdr(command)
+        pred = lambda s: s.type == 'McdReforged'
+        results = await server_manager.request_mcdr(pred, command, timeout=5.0)
         if not results:
             await matcher.finish('没有可用的MCDR服务器！')
             return
@@ -52,37 +49,16 @@ async def handle_mcdr(event: MessageEvent):
                 response += f'[{name}]: 无返回结果\n'
         await matcher.finish(response.strip())
     else:
-        # 执行到指定服务器
         server = server_manager.get_server(server_flag)
-        if not server:
+        if not server or not server.status:
             await matcher.finish(f'服务器 [{server_flag}] 不存在或未在线！')
             return
-        
-        from Scripts.Core.Connection import connection_manager
-        from Scripts.Core.EventRouter import event_router
-        
-        # 检查服务器类型是否为MCDR
-        if conn := connection_manager.get(server.name):
-            if conn.type != 'McdReforged':
-                await matcher.finish(f'服务器 [{server.name}] 不是MCDR服务器！')
-                return
-            
-            future = asyncio.Future()
-            
-            async def callback(data: Any):
-                future.set_result(data)
-            
-            echo_id = event_router.request(callback, timeout=5.0)
-            await conn.send(EventType.MCDR_COMMAND, command, echo=echo_id)
-            
-            try:
-                result = await asyncio.wait_for(future, timeout=5.0)
-                if result:
-                    await matcher.finish(f'服务器 [{server.name}] 执行结果：\n{result}')
-                else:
-                    await matcher.finish(f'MCDR命令已发送到服务器 [{server.name}]！')
-            except asyncio.TimeoutError:
-                await matcher.finish(f'服务器 [{server.name}] 响应超时！')
+        if server.type != 'McdReforged':
+            await matcher.finish(f'服务器 [{server.name}] 不是MCDR服务器！')
+            return
+        result = await server.request_mcdr(command, timeout=5.0)
+        if result:
+            await matcher.finish(f'服务器 [{server.name}] 执行结果：\n{result}')
         else:
-            await matcher.finish(f'服务器 [{server.name}] 连接不可用！')
+            await matcher.finish(f'MCDR命令已发送到服务器 [{server.name}]！')
 

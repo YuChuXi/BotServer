@@ -79,24 +79,12 @@ class DataManager:
         if exists:
             return
 
-        # 2. 决定添加到哪个群组
-        # 优先使用配置中的 target_qq_groups 的第一个
-        # 其次使用当前 group_servers 中的第一个键
-        # 最后兜底 "711159914"
-        target_group = None
-        if config.target_qq_groups:
-            target_group = str(config.target_qq_groups[0])
-        elif config.group_servers:
-            target_group = next(iter(config.group_servers))
-        else:
-            target_group = "711159914"
-        
+        # 2. 决定添加到哪个群组：用 group_servers 里已有的第一个群，没有则跳过
+        if not config.group_servers:
+            logger.warning("未配置任何群组，无法自动添加新服务器，请先在 Server.json 中配置群组")
+            return
+        target_group = next(iter(config.group_servers))
         logger.info(f"发现新服务器 [{name}]，自动添加到群组 [{target_group}]")
-
-        # 3. 添加默认配置
-        if target_group not in config.group_servers:
-            config.group_servers[target_group] = {}
-        
         config.group_servers[target_group][name] = ServerDetailConfig()
         
         # 4. 保存

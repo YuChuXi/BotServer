@@ -8,11 +8,11 @@ from nonebot.exception import WebSocketClosed
 from nonebot.log import logger
 
 from ..Core.EventRouter import event_router
-from ..Core.Connection import connection_manager
 from ..Core.Handlers import register_handlers
+from ..Managers import server_manager
 from ..Core.Auth import AuthInfo
 from ..Core.Message import Message
-from ..Utils import decode_header
+from ..Utils import decode_header, strip_format_in_response
 from ..Config import config
 from ..Managers import data_manager
 
@@ -49,8 +49,8 @@ async def handle_websocket(websocket: WebSocket):
         return
     
     data_manager.append_server(name)
-    conn = connection_manager.add(name, websocket)
-    
+    server_manager.register_server_connection(name, websocket)
+
     try:
         while True:
             try:
@@ -58,7 +58,11 @@ async def handle_websocket(websocket: WebSocket):
                 raw_message = await websocket.receive_text()
                 # 直接使用Pydantic解析JSON
                 message = Message.model_validate_json(raw_message)
-                # 使用事件路由处理消息，传递服务器名称
+                # 响应在 Server.request 的 callback 里清理；仅对事件在入口清理 § 格式
+                if not message.echo:
+                    server = server_manager.get_server(name)
+                    if server and server.should_strip_format() and message.data is not None:
+                        message = message.model_copy(update={"data": strip_format_in_response(message.data)})
                 await event_router.handle_message(message, server_name=name)
             except WebSocketClosed:
                 break
@@ -67,7 +71,7 @@ async def handle_websocket(websocket: WebSocket):
     except (ConnectionError, WebSocketClosed):
         logger.info(F'WebSocket 连接与 [{name}] 已关闭！')
     finally:
-        connection_manager.remove(name)
+        server_manager.unregister_server_connection(name)
         logger.info(F'已清理服务器 [{name}] 的连接状态')
 
 

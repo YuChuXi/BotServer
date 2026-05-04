@@ -44,7 +44,7 @@ async def convert_cq_code(kwargs: dict, event: GroupMessageEvent) -> str:
         url = kwargs.get("url", "")
         filename = kwargs.get("file", "图片")
         summary = kwargs.get("summary", filename).replace("[", "").replace("]", "")
-        return f"[{summary}]"
+        return f"[{summary if summary else "图片"}]"
         return f"[[CICode,url={url},name={summary}]]"
 
     elif cq_type == "face":
@@ -146,7 +146,5 @@ async def handle_sync_group_message(event: GroupMessageEvent):
         f"收到聊天群 [{event.group_id}] 消息，转发到绑定服务器: {sender_name}: {message_text}"
     )
 
-    # 转发到该群组绑定的所有服务器 (broadcast 会再次检查 enable_sync_group_player_chat)
-    await server_manager.broadcast(
-        "QQ群", player=sender_name, message=message_text, group_id=group_id
-    )
+    pred = lambda s: s.group_id == str(group_id) and s.config and s.config.enable_sync_group_player_chat
+    await server_manager.broadcast("QQ群", player=sender_name, message=message_text, predicate=pred)

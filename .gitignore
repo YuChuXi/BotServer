@@ -11,3 +11,4 @@ Test.py
 /Data
 /Tmp
 *.bak
+/guild1.db*
