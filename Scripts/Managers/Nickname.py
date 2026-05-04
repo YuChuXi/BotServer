@@ -29,9 +29,9 @@ class NicknameManager:
 
     @staticmethod
     def _get_groups() -> list[int]:
-        """从 config 读取当前需要更新称呼的群（每次调用取最新）"""
+        """从 config.group_servers 读取当前需要更新称呼的群（每次调用取最新）"""
         from Scripts.Config import config
-        groups = list(config.target_qq_groups)
+        groups = [int(g) for g in config.group_servers]
         if config.sync_qq_group and config.sync_qq_group not in groups:
             groups.append(config.sync_qq_group)
         return groups

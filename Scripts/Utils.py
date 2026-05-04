@@ -1,6 +1,7 @@
 """
 工具函数
 """
+import re
 import binascii
 from base64 import b64encode, b64decode
 from json import dumps, loads
@@ -10,6 +11,26 @@ from nonebot.permission import Permission
 from nonebot.adapters.onebot.v11 import MessageEvent, GroupMessageEvent
 
 from .Config import config
+
+
+def strip_minecraft_format_codes(text: str) -> str:
+    """移除 Minecraft § 格式化代码（§ 及其后一字符）。"""
+    if not text:
+        return text
+    return re.sub(r'§.', '', text)
+
+
+def strip_format_in_response(obj: Any) -> Any:
+    """递归清理 § 格式化代码（用于服务端返回的 data）。"""
+    if obj is None:
+        return obj
+    if isinstance(obj, str):
+        return strip_minecraft_format_codes(obj)
+    if isinstance(obj, list):
+        return [strip_format_in_response(x) for x in obj]
+    if isinstance(obj, dict):
+        return {k: strip_format_in_response(v) for k, v in obj.items()}
+    return obj
 
 
 def decode_header(string: str) -> dict[str, Any] | None:
@@ -23,15 +44,8 @@ def decode_header(string: str) -> dict[str, Any] | None:
 
 
 def is_configured_group(group_id: int) -> bool:
-    """检查是否是已配置的群组（包括TargetGroups和GroupServers）"""
-    str_gid = str(group_id)
-    # 检查是否在 group_servers 中
-    if str_gid in config.group_servers:
-        return True
-    # 检查是否在 target_qq_groups 中
-    if group_id in config.target_qq_groups:
-        return True
-    return False
+    """检查是否是已配置的群组（以 group_servers 为准）"""
+    return str(group_id) in config.group_servers
 
 
 async def has_group_member_permission(event: GroupMessageEvent) -> bool:

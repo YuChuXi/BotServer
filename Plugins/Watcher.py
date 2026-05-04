@@ -19,6 +19,7 @@ async def handle_group_decrease(event: GroupDecreaseNoticeEvent):
     if not isinstance(event, GroupDecreaseNoticeEvent):
         return
     
+    
     qq = str(event.user_id)
     group_id = str(event.group_id)
     
@@ -57,3 +58,4 @@ async def handle_group_invite(bot: Bot, event: GroupRequestEvent):
         logger.warning(f"拒绝用户 {event.user_id} 的邀请：非管理员，喵~")
         # 拒绝邀请 (可选)
         # await event.reject(bot, "非管理员无法邀请Bot入群")
+

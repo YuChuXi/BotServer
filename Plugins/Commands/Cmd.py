@@ -1,7 +1,6 @@
 """
 服务器命令插件 - 在指定服务器执行命令，支持多行每行一个命令
 """
-import asyncio
 import re
 from typing import Any
 from nonebot import on_regex
@@ -9,7 +8,6 @@ from nonebot.adapters.onebot.v11 import GroupMessageEvent
 from nonebot.log import logger
 
 from Scripts.Managers import server_manager
-from Scripts.Core.Message import EventType
 from Scripts.Utils import MC_SERVER_ADMIN_PERMISSION
 from Scripts.Config import config
 
@@ -36,34 +34,23 @@ def _fmt(cmd: str, result: Any, prefix: str = '') -> str:
     return f'{prefix}{cmd}: {result}' if result else f'{prefix}{cmd}: 无返回结果'
 
 
+def _predicate_by_group(group_id: str | None):
+    if not group_id:
+        return lambda s: True
+    return lambda s: s.name in config.group_servers.get(str(group_id), {})
+
+
 async def _execute_batch(commands: list[str], group_id: str | None) -> dict[str, list[tuple[str, Any]]]:
-    """批量执行到 server_manager，返回 {server_name: [(cmd, result), ...]}"""
-    out = {}
-    for cmd in commands:
-        for name, result in (await server_manager.execute(cmd, group_id=group_id) or {}).items():
-            out.setdefault(name, []).append((cmd, result))
-    return out
+    """筛选器 + 并发：command 为 Union[str, Iterable[str]]，批量在 Server 上执行。"""
+    pred = _predicate_by_group(group_id)
+    results = await server_manager.execute_batch(pred, commands)
+    return {name: list(zip(commands, res_list)) for name, res_list in results.items()}
 
 
-async def _execute_single(conn: Any, event_router: Any, commands: list[str], timeout: float = 5.0) -> list[str]:
-    """在单连接上顺序执行命令，返回每条的格式化结果"""
-    lines = []
-    for cmd in commands:
-        fut = asyncio.Future()
-
-        def make_cb(f):
-            async def cb(data):
-                f.set_result(data)
-            return cb
-
-        echo_id = event_router.request(make_cb(fut), timeout=timeout)
-        await conn.send(EventType.COMMAND, cmd, echo=echo_id)
-        try:
-            r = await asyncio.wait_for(fut, timeout=timeout)
-            lines.append(_fmt(cmd, r) if r else f'{cmd}: 已发送')
-        except asyncio.TimeoutError:
-            lines.append(f'{cmd}: 响应超时')
-    return lines
+async def _execute_single(server: Any, commands: list[str], timeout: float = 5.0) -> list[str]:
+    """单服：Server.execute_batch，返回每条的格式化结果。"""
+    res_list = await server.execute_batch(commands, timeout=timeout)
+    return [_fmt(cmd, r) if r else f'{cmd}: 已发送' for cmd, r in zip(commands, res_list)]
 
 
 @matcher.handle()
@@ -103,15 +90,8 @@ async def handle_cmd(event: GroupMessageEvent):
     #     await matcher.finish(f'服务器 [{server_flag}] 未绑定到当前群组，无法操作，喵~')
     #     return
     server = server_manager.get_server(server_flag)
-    if not server:
+    if not server or not server.status:
         await matcher.finish(f'服务器 [{server_flag}] 不存在或未在线，喵~')
 
-    from Scripts.Core.Connection import connection_manager
-    from Scripts.Core.EventRouter import event_router
-
-    conn = connection_manager.get(server.name)
-    if not conn:
-        await matcher.finish(f'服务器 [{server.name}] 连接不可用，喵~')
-
-    lines = await _execute_single(conn, event_router, commands)
+    lines = await _execute_single(server, commands)
     await matcher.finish(f'服务器 [{server.name}] 执行结果：\n' + '\n'.join(lines) + '\n喵~')

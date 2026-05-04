@@ -8,7 +8,7 @@ from nonebot.log import logger
 from Scripts.Managers import server_manager
 from Scripts.Utils import GROUP_MEMBER_PERMISSION, SYNC_GROUP_MEMBER_PERMISSION
 
-matcher = on_regex('[查|插]服', priority=10, block=True, permission=GROUP_MEMBER_PERMISSION | SYNC_GROUP_MEMBER_PERMISSION)
+matcher = on_regex('[查|插][服|福]', priority=10, block=True, permission=GROUP_MEMBER_PERMISSION | SYNC_GROUP_MEMBER_PERMISSION)
 
 
 @matcher.handle()
@@ -17,8 +17,8 @@ async def handle_list(event: GroupMessageEvent):
     # 记录日志
     logger.info(f'群 {event.group_id} 用户 {event.user_id} 查询所有服务器玩家列表')
     
-    # 获取所有在线服务器的玩家列表（不传入 group_id 即获取所有）
-    player_lists = await server_manager.get_player_list()
+    pred = lambda s: s.config and s.config.enable_query
+    player_lists = await server_manager.request_player_list(pred)
     
     if not player_lists:
         await matcher.finish('当前没有连接任何服务器，喵～')
