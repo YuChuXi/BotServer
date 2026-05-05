@@ -12,3 +12,4 @@ Test.py
 /Tmp
 *.bak
 /guild1.db*
+/.env*
