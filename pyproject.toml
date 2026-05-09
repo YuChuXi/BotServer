@@ -10,6 +10,8 @@ dependencies = [
     "psutil>=7.0.0",
     "nonebot-adapter-onebot>=2.4.6",
     "Pillow>=10.0.0",
+    "langchain>=0.2.0",
+    "langchain-ollama>=0.2.0",
 ]
 
 [tool.nonebot]
