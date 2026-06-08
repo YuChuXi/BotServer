@@ -353,6 +353,8 @@ history_collector = on_message(priority=4, block=False)
 async def _collect_history(event: GroupMessageEvent):
     if not is_configured_group(event.group_id):
         return
+    if not config.get_group_config(event.group_id).enable_ai_chat:
+        return
     bot = get_bot()
     sender_name = await _extract_sender_name(event)
     text, images = await _extract_text_and_images(event)
@@ -372,8 +374,9 @@ async def _collect_history(event: GroupMessageEvent):
 
 
 def _ai_chat_rule(event: GroupMessageEvent) -> bool:
-    # 只在绑定服务器的群 + @机器人 时才触发 matcher
-    return is_configured_group(event.group_id) and event.is_tome()
+    if not is_configured_group(event.group_id) or not event.is_tome():
+        return False
+    return config.get_group_config(event.group_id).enable_ai_chat
 
 
 # 2) @触发回复：仅在绑定服务器的群、且用户@机器人时

@@ -10,7 +10,9 @@ from io import BytesIO
 
 import httpx
 from nonebot import on_regex
-from nonebot.adapters.onebot.v11 import Message, MessageSegment
+from nonebot.adapters.onebot.v11 import GroupMessageEvent, Message, MessageSegment
+
+from Scripts.Config import config
 
 _ROOT = Path(__file__).resolve().parents[2]
 TAROT_DIR = _ROOT / "Assets" / "抽牌"
@@ -106,7 +108,10 @@ def _daily_draw(user_id: int, external_seed: str) -> tuple[str, bool]:
 
 
 @_matcher.handle()
-async def _handle_tarot(event):
+async def _handle_tarot(event: GroupMessageEvent):
+    if not config.get_group_config(event.group_id).enable_tarot:
+        return
+
     if not _tarot_message_cache:
         await _build_tarot_cache()
 

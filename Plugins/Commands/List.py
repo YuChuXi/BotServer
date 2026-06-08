@@ -5,6 +5,7 @@ from nonebot import on_regex
 from nonebot.adapters.onebot.v11 import GroupMessageEvent
 from nonebot.log import logger
 
+from Scripts.Config import config
 from Scripts.Managers import server_manager
 from Scripts.Utils import GROUP_MEMBER_PERMISSION, SYNC_GROUP_MEMBER_PERMISSION
 
@@ -17,7 +18,16 @@ async def handle_list(event: GroupMessageEvent):
     # 记录日志
     logger.info(f'群 {event.group_id} 用户 {event.user_id} 查询所有服务器玩家列表')
     
-    pred = lambda s: s.config and s.config.enable_query
+    group_id = str(event.group_id)
+    group_conf = config.get_group_config(group_id)
+
+    def pred(s):
+        if not s.config:
+            return False
+        return s.config.visible_in_query(
+            group_id, s.group_id, group_conf.include_other_groups_in_query
+        )
+
     player_lists = await server_manager.request_player_list(pred)
     
     if not player_lists:

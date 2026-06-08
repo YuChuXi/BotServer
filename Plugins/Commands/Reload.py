@@ -6,7 +6,7 @@ from nonebot import on_regex
 from nonebot.adapters.onebot.v11 import MessageEvent
 from nonebot.log import logger
 
-from Scripts.Managers import data_manager, bound_manager, nickname_manager
+from Scripts.Managers import data_manager, group_manager, bound_manager, nickname_manager
 from Scripts.Utils import HOST_ADMIN_PERMISSION
 
 
@@ -31,6 +31,12 @@ async def handle_reload(event: MessageEvent):
         errors.append(f'Server.json: {e}')
 
     try:
+        group_manager.load()  # Group.json
+    except Exception as e:
+        logger.error(f'重载 Group.json 失败: {e}')
+        errors.append(f'Group.json: {e}')
+
+    try:
         bound_manager._load()  # Player.json
     except Exception as e:
         logger.error(f'重载 Player.json 失败: {e}')
@@ -45,4 +51,4 @@ async def handle_reload(event: MessageEvent):
     if errors:
         await matcher.finish('重载完成，部分失败：\n' + '\n'.join(errors))
     else:
-        await matcher.finish('Data 配置已重载（Server.json / Player.json / Nickname.json）')
+        await matcher.finish('Data 配置已重载（Server.json / Group.json / Player.json / Nickname.json）')
