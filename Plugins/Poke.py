@@ -7,6 +7,8 @@ from pathlib import Path
 from nonebot import on_notice
 from nonebot.adapters.onebot.v11 import MessageSegment, PokeNotifyEvent
 
+from Scripts.Config import config
+
 _ROOT = Path(__file__).resolve().parents[1]
 GIF_PATH = _ROOT / "Assets" / "肘一肘.gif"
 
@@ -31,6 +33,10 @@ matcher = on_notice(priority=10, block=True)
 async def handle_poke(event: PokeNotifyEvent):
     """被戳时回复肘一肘.gif"""
     if not event.is_tome():
+        return
+
+    group_id = getattr(event, "group_id", None)
+    if group_id is not None and not config.get_group_config(group_id).enable_poke:
         return
 
     data = _preload_gif()

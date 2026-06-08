@@ -24,9 +24,10 @@ def main():
 @driver.on_startup
 async def startup():
     from Scripts.Servers import Websocket
-    from Scripts.Managers import data_manager
+    from Scripts.Managers import data_manager, group_manager
 
     data_manager.load()
+    group_manager.load()
     Websocket.setup_websocket_server()
 
 
