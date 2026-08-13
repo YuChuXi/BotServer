@@ -52,9 +52,6 @@ class ServerManager:
             s.status = True
         else:
             self._servers[name] = Server(name, websocket)
-        s = self._servers[name]
-        binding = config.get_server_binding(name)
-        s.group_id, s.config = (binding[0], binding[1]) if binding else (None, None)
 
     def unregister_server_connection(self, name: str) -> None:
         if name in self._servers:

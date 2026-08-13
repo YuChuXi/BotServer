@@ -9,7 +9,7 @@ from nonebot.log import logger
 
 from .Message import Message, EventType
 from .EventRouter import event_router
-from ..Config import ServerDetailConfig
+from ..Config import ServerDetailConfig, config
 from ..Utils import strip_format_in_response
 
 
@@ -22,8 +22,19 @@ class Server:
         self.type = websocket.request.headers.get("type", "Unknown")
         self.status = True
         self.player_list: list = []
-        self.group_id: Optional[str] = None
-        self.config: Optional[ServerDetailConfig] = None
+
+    def _get_binding(self) -> Optional[tuple[str, ServerDetailConfig]]:
+        return config.get_server_binding(self.name)
+
+    @property
+    def group_id(self) -> Optional[str]:
+        binding = self._get_binding()
+        return binding[0] if binding else None
+
+    @property
+    def config(self) -> Optional[ServerDetailConfig]:
+        binding = self._get_binding()
+        return binding[1] if binding else None
 
     def get_group(self) -> Optional[str]:
         """本服唯一所属群 ID。"""
