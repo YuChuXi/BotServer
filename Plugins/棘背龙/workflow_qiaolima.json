@@ -1,0 +1,208 @@
+{
+  "3": {
+    "inputs": {
+      "seed": 1006429931423948,
+      "steps": 20,
+      "cfg": 6.3,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "33",
+        0
+      ],
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "28",
+        0
+      ],
+      "latent_image": [
+        "32",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "K采样器"
+    }
+  },
+  "6": {
+    "inputs": {
+      "text": [
+        "23",
+        0
+      ],
+      "speak_and_recognation": {
+        "__value__": [
+          false,
+          true
+        ]
+      },
+      "clip": [
+        "33",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP文本编码"
+    }
+  },
+  "8": {
+    "inputs": {
+      "samples": [
+        "3",
+        0
+      ],
+      "vae": [
+        "26",
+        2
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE解码"
+    }
+  },
+  "14": {
+    "inputs": {
+      "image": "g (72).jpg"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "加载图像"
+    }
+  },
+  "22": {
+    "inputs": {
+      "model": "wd-vit-tagger-v3",
+      "threshold": 0.30000000000000004,
+      "character_threshold": 0.10000000000000002,
+      "replace_underscore": true,
+      "trailing_comma": true,
+      "exclude_tags": [
+        "31",
+        0
+      ],
+      "image": [
+        "14",
+        0
+      ]
+    },
+    "class_type": "WD14Tagger|pysssss",
+    "_meta": {
+      "title": "WD14 Tagger 🐍"
+    }
+  },
+  "23": {
+    "inputs": {
+      "string_a": "angrydognoises, emphasis lines, 2koma, comic, chibi, fang, parted lips, open mouth, angry, v-shaped eyebrows, white background,",
+      "string_b": [
+        "22",
+        0
+      ],
+      "delimiter": "",
+      "speak_and_recognation": {
+        "__value__": [
+          false,
+          true
+        ]
+      }
+    },
+    "class_type": "StringConcatenate",
+    "_meta": {
+      "title": "Concatenate"
+    }
+  },
+  "24": {
+    "inputs": {
+      "images": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "预览图像"
+    }
+  },
+  "26": {
+    "inputs": {
+      "ckpt_name": "noobaiXLNAIXL_epsilonPred075.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Checkpoint加载器（简易）"
+    }
+  },
+  "28": {
+    "inputs": {
+      "text": [
+        "31",
+        0
+      ],
+      "speak_and_recognation": {
+        "__value__": [
+          false,
+          true
+        ]
+      },
+      "clip": [
+        "33",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP文本编码"
+    }
+  },
+  "31": {
+    "inputs": {
+      "value": "realistic, real, 3d, naked, porn, sexy, blood, gore, explicit, disgusting, mutilation, text, watermark, logo, font, signature, sex, ass, anus, cum on body, anal, tentacle sex, nipples, cum in ass, pussy juice, pussy, breasts, cum, blush, no panties, \n\nsex, intercourse, pussy insert, vaginal, anal, anal intercourse, oral, blowjob, cunnilingus, group sex, threesome, foursome, gangbang, handjob, masturbation, orgasm, ejaculation, creampie, double penetration, facefuck, pussy spread, cum inflation, tentacle rape, naked, nude, topless, bottomless, full body nude, breasts, nipples, pussy, anus, ass, vaginal, pussy lips, clitoris, penis, cock, cum, semen, vaginal fluid, cum covered, cum on face, cum on breasts, cum on pussy, cum on ass, erotic, pornography, hentai, ecchi, lewd, moaning, ahegao, squinting, eyes rolling up, panty shot, pussy shot, cameltoe, exposed pussy, exposed anus, bondage, leash, gag, shackles, nipple clamps, sex toys, dildo, vibrator, lolicon, shotacon, shota, incest, rape, nonconsensual, loli, shota, doujinshi, yuri, yaoi, futanari, transsexual, shemale, pregnant, lactating, public sex,  spread legs,  leg up, smile, grin, open mouth, :d, 1girl, 1boy, ",
+      "speak_and_recognation": {
+        "__value__": [
+          false,
+          true
+        ]
+      }
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "字符串（多行）"
+    }
+  },
+  "32": {
+    "inputs": {
+      "width": 800,
+      "height": 1000,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "空Latent图像"
+    }
+  },
+  "33": {
+    "inputs": {
+      "lora_name": "Angry_Dog_Noises__Chibi_Meme_Concept__IllustriousXL_and_NoobAI-000015.safetensors",
+      "strength_model": 1.0000000000000002,
+      "strength_clip": 1.2,
+      "model": [
+        "26",
+        0
+      ],
+      "clip": [
+        "26",
+        1
+      ]
+    },
+    "class_type": "LoraLoader",
+    "_meta": {
+      "title": "加载LoRA"
+    }
+  }
+}
