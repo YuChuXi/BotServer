@@ -1,0 +1,231 @@
+{
+  "46": {
+    "inputs": {
+      "filename_prefix": "Anima",
+      "images": [
+        "63",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "保存图像"
+    }
+  },
+  "61": {
+    "inputs": {
+      "clip_name": "qwen_3_06b_base.safetensors",
+      "type": "stable_diffusion",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "加载CLIP"
+    }
+  },
+  "62": {
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "加载VAE"
+    }
+  },
+  "63": {
+    "inputs": {
+      "samples": [
+        "66",
+        0
+      ],
+      "vae": [
+        "62",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE解码"
+    }
+  },
+  "64": {
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "空Latent图像"
+    }
+  },
+  "65": {
+    "inputs": {
+      "text": "worst quality, low quality, score_1, score_2, score_3, jpeg artifacts, censor, watermark, username, sepia, sketch, nsfw, explicit",
+      "clip": [
+        "61",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Negative Prompt)"
+    }
+  },
+  "66": {
+    "inputs": {
+      "seed": 160258603744939,
+      "steps": 5,
+      "cfg": 1,
+      "sampler_name": "euler_ancestral_cfg_pp",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "139",
+        0
+      ],
+      "positive": [
+        "67",
+        0
+      ],
+      "negative": [
+        "65",
+        0
+      ],
+      "latent_image": [
+        "64",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "K采样器"
+    }
+  },
+  "67": {
+    "inputs": {
+      "text": [
+        "140",
+        0
+      ],
+      "clip": [
+        "61",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Positive Prompt)"
+    }
+  },
+  "68": {
+    "inputs": {
+      "unet_name": "anima-base-v1.0.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "UNet加载器"
+    }
+  },
+  "71": {
+    "inputs": {
+      "lora_name": "output/鼬_anima.safetensors",
+      "strength_model": 1,
+      "model": [
+        "68",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoRA加载器（仅模型）"
+    }
+  },
+  "119": {
+    "inputs": {
+      "model": "wd-eva02-large-tagger-v3",
+      "threshold": 0.5,
+      "character_threshold": 0.65,
+      "replace_underscore": true,
+      "trailing_comma": true,
+      "exclude_tags": [
+        "120",
+        0
+      ],
+      "tags": "chocola \\(nekopara\\), long hair, breasts, blush, open mouth, blue eyes, multiple girls, brown hair, bow, animal ears, ribbon, 2girls, twintails, brown eyes, tail, upper body, yellow eyes, white hair, hair ribbon, hair bow, sweat, nude, small breasts, tongue, cat ears, blunt bangs, tongue out, tears, yuri, collar, flat chest, animal ear fluff, orange eyes, cat tail, loli, bell, hug, saliva, blue bow, low twintails, cat girl, trembling, blue ribbon, slit pupils, jingle bell, neck bell, licking, tearing up, heavy breathing, hug from behind, animal collar, red collar, child on child, blue collar, pink collar, ",
+      "image": [
+        "122",
+        0
+      ]
+    },
+    "class_type": "WD14Tagger|pysssss",
+    "_meta": {
+      "title": "WD14 Tagger 🐍"
+    }
+  },
+  "120": {
+    "inputs": {
+      "value": "animalization, chibi, meme, "
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "字符串（多行）"
+    }
+  },
+  "121": {
+    "inputs": {
+      "string_a": "animalization, chibi, meme, safe",
+      "string_b": [
+        "119",
+        0
+      ],
+      "delimiter": ""
+    },
+    "class_type": "StringConcatenate",
+    "_meta": {
+      "title": "连接"
+    }
+  },
+  "122": {
+    "inputs": {
+      "image": "photo_6093512189126840628_y.jpg"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "加载图像"
+    }
+  },
+  "139": {
+    "inputs": {
+      "lora_name": "anima/anima-turbo-lora-v0.2.safetensors",
+      "strength_model": 1,
+      "model": [
+        "71",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoRA加载器（仅模型）"
+    }
+  },
+  "140": {
+    "inputs": {
+      "string": [
+        "121",
+        0
+      ],
+      "regex_pattern": "(?i)(?:^|,)\\s*[^,]*(?:\\b(?:nude|nipples|pussy|breasts|loli|shota|sex|cum|penis|vagina|pull|breathing|tongue|yuri|sweat|saliva|ass|text|licking)\\b)[^,]*(?=$|,)",
+      "replace": "",
+      "case_insensitive": true,
+      "multiline": false,
+      "dotall": false,
+      "count": 0
+    },
+    "class_type": "RegexReplace",
+    "_meta": {
+      "title": "正则表达式替换"
+    }
+  }
+}
