@@ -12,6 +12,7 @@ dependencies = [
     "Pillow>=10.0.0",
     "langchain>=0.2.0",
     "langchain-ollama>=0.2.0",
+    "nb-cli"
 ]
 
 [tool.nonebot]
@@ -24,3 +25,7 @@ builtin_plugins = []
 [tool.nonebot.adapters]
 "@local" = []
 nonebot-adapter-onebot = [{name = "OneBot V11", module_name = "nonebot.adapters.onebot.v11"}]
+
+# 本目录为部署目录而非 Python 库，禁止 setuptools 自动发现包
+[tool.setuptools]
+py-modules = []

@@ -1,0 +1,8 @@
+LICENSE
+README.md
+pyproject.toml
+Minecraft_QQBot.egg-info/PKG-INFO
+Minecraft_QQBot.egg-info/SOURCES.txt
+Minecraft_QQBot.egg-info/dependency_links.txt
+Minecraft_QQBot.egg-info/requires.txt
+Minecraft_QQBot.egg-info/top_level.txt
