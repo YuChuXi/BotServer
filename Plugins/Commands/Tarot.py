@@ -24,7 +24,7 @@ _tarot_message_cache: dict[tuple[str, bool], Message] = {}
 # 按自然日缓存外部熵（成功时为汇率字符串，失败时为 fallback），避免重复打 API
 _external_seed_cache: dict = {"date": None, "seed": None}
 
-_matcher = on_regex(r'^抽[牌|卡]$', priority=10, block=True)
+_matcher = on_regex(r'^[抽插]*[牌卡]$', priority=10, block=True)
 
 
 def _load_tarot() -> dict:

@@ -12,7 +12,8 @@ dependencies = [
     "Pillow>=10.0.0",
     "langchain>=0.2.0",
     "langchain-ollama>=0.2.0",
-    "nb-cli"
+    "nb-cli",
+    "nonebot-plugin-wordcloud>=0.11.1",
 ]
 
 [tool.nonebot]
@@ -20,6 +21,7 @@ plugin_dirs = ["BotServer/Plugins"]
 builtin_plugins = []
 [tool.nonebot.plugins]
 "@local" = []
+nonebot-plugin-wordcloud = ["nonebot_plugin_wordcloud"]
 
 
 [tool.nonebot.adapters]

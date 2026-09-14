@@ -29,7 +29,7 @@ from Scripts.Utils import is_configured_group
 
 
 class AIChatPluginConfig(BaseModel):
-    ollama_base_url: str = Field(default="http://10.147.20.104:11434", alias="AI_OLLAMA_BASE_URL")
+    ollama_base_url: str = Field(default="http://10.147.20.131:11434", alias="AI_OLLAMA_BASE_URL")
     ollama_model: str = Field(default="gemma4:26b", alias="AI_OLLAMA_MODEL")
     system_prompt: str = Field(
         default=(

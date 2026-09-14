@@ -22,7 +22,7 @@ from nonebot import logger
 
 # ===== 配置 =====
 COMFY_SERVER = os.getenv(
-    "COMFY_SERVER", "https://10.147.20.20:48189"
+    "COMFY_SERVER", "https://10.147.20.20:481899"
 )  # ComfyUI 服务地址
 POLL_INTERVAL = float(os.getenv("COMFY_POLL_INTERVAL", "0.3"))  # 轮询间隔秒
 POLL_TIMEOUT = int(os.getenv("COMFY_POLL_TIMEOUT", "600"))  # 超时秒
