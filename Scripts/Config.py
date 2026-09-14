@@ -9,9 +9,9 @@ QueryVisibility = Literal['禁用', '当前群', '跨群']
 class GroupConfig(BaseModel):
     """群组配置"""
     include_other_groups_in_query: bool = False  # 查服时是否包含其他群的服务器
-    enable_ai_chat: bool = True  # 是否响应 @ 机器人的 AI 聊天
-    enable_poke: bool = True  # 是否响应戳一戳
-    enable_tarot: bool = True  # 是否启用抽卡
+    enable_ai_chat: bool = False  # 是否响应 @ 机器人的 AI 聊天
+    enable_poke: bool = False  # 是否响应戳一戳
+    enable_tarot: bool = False  # 是否启用抽卡
 
 
 class ServerDetailConfig(BaseModel):
