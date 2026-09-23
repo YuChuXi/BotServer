@@ -7,6 +7,8 @@ from nonebot.log import logger
 nonebot.init()
 
 nonebot.load_plugins('Plugins')
+nonebot.load_plugin('nonebot_plugin_chatrecorder')
+
 app = nonebot.get_asgi()
 driver = nonebot.get_driver()
 driver.register_adapter(Adapter)

@@ -1,0 +1,395 @@
+{
+  "461": {
+    "inputs": {
+      "filename_prefix": "Qwen_image_2.1",
+      "format": "png",
+      "format.bit_depth": "8-bit",
+      "format.input_color_space": "sRGB",
+      "images": [
+        "540",
+        0
+      ]
+    },
+    "class_type": "SaveImageAdvanced",
+    "_meta": {
+      "title": "输出图1"
+    }
+  },
+  "536": {
+    "inputs": {
+      "unet_name": "local/qwen_image_2.1_bf16.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "UNet加载器"
+    }
+  },
+  "537": {
+    "inputs": {
+      "clip_name": "local/qwen3vl_8b_bf16.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "加载CLIP"
+    }
+  },
+  "538": {
+    "inputs": {
+      "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "加载VAE"
+    }
+  },
+  "539": {
+    "inputs": {
+      "width": [
+        "558",
+        0
+      ],
+      "height": [
+        "559",
+        0
+      ],
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "空Latent图像"
+    }
+  },
+  "540": {
+    "inputs": {
+      "samples": [
+        "560",
+        0
+      ],
+      "vae": [
+        "538",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE解码"
+    }
+  },
+  "542": {
+    "inputs": {
+      "device": "auto",
+      "dtype": "default",
+      "model": [
+        "536",
+        0
+      ]
+    },
+    "class_type": "QwenImage21Cache",
+    "_meta": {
+      "title": "Qwen Image 2.1 Cache"
+    }
+  },
+  "543": {
+    "inputs": {
+      "prompt": [
+        "550",
+        0
+      ],
+      "negative_prompt": "",
+      "resolution": 1024,
+      "clip": [
+        "537",
+        0
+      ],
+      "images.image_1": [
+        "566",
+        0
+      ],
+      "images.image_2": [
+        "567",
+        0
+      ],
+      "vae": [
+        "538",
+        0
+      ]
+    },
+    "class_type": "TextEncodeQwenImage21",
+    "_meta": {
+      "title": "Text Encode Qwen Image 2.1"
+    }
+  },
+  "548": {
+    "inputs": {
+      "max_shift": 0.69,
+      "base_shift": 0.5,
+      "width": [
+        "558",
+        0
+      ],
+      "height": [
+        "559",
+        0
+      ],
+      "model": [
+        "542",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingFlux",
+    "_meta": {
+      "title": "采样算法（Flux）"
+    }
+  },
+  "550": {
+    "inputs": {
+      "system": "你与用户共用一张创作台。桌上可能放着一句话、一张脸、几张互不相干的照片、一段故事、一件商品、一种说不清的感觉。你接过这些东西，让它们成为一幅值得停下来看的画面，再把这幅画面写给 Qwen Image 2.1。\n\n你能看到与生成模型相同、顺序一致的参考图。用户的消息会提供创作材料、目标尺寸，以及可能存在的用途、文字和其他要求。把这些材料放在一起理解。用户已经作出的选择是作品的起点；尚未决定的地方，留给你创作。\n\n在这里，可以认真对待一个荒唐的念头，可以让一幅画安静到只剩两种颜色，也可以把欢乐做得拥挤、廉价、过量。漂亮、怪异、笨拙、锋利、亲密、滑稽，都有各自成立的方式。顺着这一次材料的性格往里走，让作品长出自己的口吻。\n\n留意那个让人想继续看的东西。它可能是一个动作发生到一半，一件东西出现在意外的位置，一种材质跨过了原本的边界，也可能只是两个形状之间恰到好处的距离。找到它，让取景、色彩、人物和空间共同托住它。需要大胆时，就做出大胆的选择；一个简单的形象已经站得住时，让它保持简单。\n\n写画面时，进入它。人物正把身体的重量放在哪里？眼睛看向谁，手却在做什么？风经过以后留下了什么？一块红色为什么偏偏出现在这里？这些问题可以自然地引出画面，你无需逐个回答，也无需向用户展示思考过程。写下真正改变观看感受的部分，其余交给图像去呼吸。\n\n用户给出抽象感受、诗句、片段或几个词时，允许联想，选择一个明确的视觉解释，把它发展成能被看见的作品。用户给出完整构想时，沿着其中最有意思的部分深入。用户要海报、封面、商品图、图解或梗图时，让作品在实际用途里成立；可读性、笑点、信息关系和商品辨识度也可以成为表现力的来源。资料中的事实、数字和明确要求保持准确。\n\n参考图是可以直接使用的视觉材料。根据用户意图判断它提供的是人物身份、商品外形、姿态、构图、笔触、配色，还是等待修改的原图。需要指明来源时，沿用输入顺序写 image 1、image 2 等，并说清继承什么。把参考关系交代到足以执行即可，避免用一大段外貌猜测覆盖图中已有的信息。用户要保留的人和物，要让它们仍然认得出来；用户授权改变的部分，可以充分发展。\n\n用户只要求局部修改时，输出直接、清楚的编辑指令，说明改变的位置和结果，并简要保留关键未改部分。这种任务几句话就可以完成。多图合成则让来自不同图片的元素真正生活在同一个画面里：它们有合适的尺度、接触、遮挡和共同的光。圈选、涂抹和遮罩按编辑指示理解，除非用户明确要把标记保留在作品中。\n\n按提供的宽高安排画面。宽幅可以展开距离与关系，竖幅可以让身体、建筑或下坠感生长，方形也可以拥挤或偏心；由作品决定如何使用空间。尺寸作为构图条件，不写成画面中的文字，也不把分辨率数字当成画质形容词。\n\n用户指定出现在图中的文字，逐字保留原语言、拼写和标点，用双引号标出，并自然交代它在哪里、以什么方式出现。仅供理解的故事、备注和情绪，不自动变成标题或标语。用户要透明背景时，明确写 transparent background，主体内部仍保留需要的颜色与不透明部分。\n\n最终只输出一份可直接交给 Qwen Image 2.1 的纯文本提示词。默认使用英文；用户明确指定提示词语言时遵从指定。画面内文字始终保持用户要求的语言。自由生成时直接描写选定的画面，编辑时直接写编辑指令。长度随作品需要变化，复杂排版可以自然分段。不要输出标题、字段名、JSON、Markdown、解释、备选方案或思考过程。\n\n落笔就进入画面。写到这个想法已经能被看见，就结束。\n",
+      "prompt": [
+        "554",
+        0
+      ],
+      "think": true,
+      "format": "text",
+      "reset_session": true,
+      "connectivity": [
+        "551",
+        0
+      ],
+      "options": [
+        "552",
+        0
+      ],
+      "images": [
+        "556",
+        0
+      ]
+    },
+    "class_type": "OllamaChat",
+    "_meta": {
+      "title": "Ollama Chat"
+    }
+  },
+  "551": {
+    "inputs": {
+      "url": "http://192.168.100.92:11434",
+      "model": "huihui_ai/gemma-4-abliterated:26b-qat",
+      "keep_alive": 5,
+      "keep_alive_unit": "minutes"
+    },
+    "class_type": "OllamaConnectivityV2",
+    "_meta": {
+      "title": "Ollama Connectivity"
+    }
+  },
+  "552": {
+    "inputs": {
+      "enable_mirostat": false,
+      "mirostat": 0,
+      "enable_mirostat_eta": false,
+      "mirostat_eta": 0.1,
+      "enable_mirostat_tau": false,
+      "mirostat_tau": 5,
+      "enable_num_ctx": false,
+      "num_ctx": 2048,
+      "enable_repeat_last_n": true,
+      "repeat_last_n": 64,
+      "enable_repeat_penalty": true,
+      "repeat_penalty": 1,
+      "enable_temperature": true,
+      "temperature": 1.3,
+      "enable_seed": true,
+      "seed": [
+        "562",
+        0
+      ],
+      "enable_stop": false,
+      "stop": "",
+      "enable_tfs_z": false,
+      "tfs_z": 1,
+      "enable_num_predict": false,
+      "num_predict": -1,
+      "enable_top_k": false,
+      "top_k": 100,
+      "enable_top_p": true,
+      "top_p": 0.5,
+      "enable_min_p": false,
+      "min_p": 0.1,
+      "debug": false
+    },
+    "class_type": "OllamaOptionsV2",
+    "_meta": {
+      "title": "Ollama Options"
+    }
+  },
+  "554": {
+    "inputs": {
+      "f_string": "画面宽高: {a}x{b}\n\n{c}",
+      "values.a": [
+        "558",
+        0
+      ],
+      "values.b": [
+        "559",
+        0
+      ],
+      "values.c": [
+        "555",
+        0
+      ]
+    },
+    "class_type": "StringFormat",
+    "_meta": {
+      "title": "格式化文本"
+    }
+  },
+  "555": {
+    "inputs": {
+      "value": "把图一中的角色换成图二的"
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "提示词"
+    }
+  },
+  "556": {
+    "inputs": {
+      "images.image0": [
+        "564",
+        0
+      ],
+      "images.image1": [
+        "565",
+        0
+      ]
+    },
+    "class_type": "OllamaImages",
+    "_meta": {
+      "title": "Ollama Images"
+    }
+  },
+  "558": {
+    "inputs": {
+      "value": 832
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "宽度"
+    }
+  },
+  "559": {
+    "inputs": {
+      "value": 1248
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "高度"
+    }
+  },
+  "560": {
+    "inputs": {
+      "seed": [
+        "562",
+        0
+      ],
+      "steps": 25,
+      "cfg": 1,
+      "sampler_name": "euler_ancestral",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "548",
+        0
+      ],
+      "positive": [
+        "543",
+        0
+      ],
+      "negative": [
+        "543",
+        1
+      ],
+      "latent_image": [
+        "539",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "K采样器"
+    }
+  },
+  "562": {
+    "inputs": {
+      "seed": 3037416242
+    },
+    "class_type": "SeedNode",
+    "_meta": {
+      "title": "种子"
+    }
+  },
+  "563": {
+    "inputs": {
+      "source": [
+        "550",
+        0
+      ]
+    },
+    "class_type": "PreviewAny",
+    "_meta": {
+      "title": "预览任意"
+    }
+  },
+  "564": {
+    "inputs": {
+      "image": "download (10).jpg"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "输入图1"
+    }
+  },
+  "565": {
+    "inputs": {
+      "image": "download (11).jpg"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "输入图2"
+    }
+  },
+  "566": {
+    "inputs": {
+      "image": [
+        "564",
+        0
+      ],
+      "alpha": [
+        "564",
+        1
+      ]
+    },
+    "class_type": "JoinImageWithAlpha",
+    "_meta": {
+      "title": "合并图像Alpha1"
+    }
+  },
+  "567": {
+    "inputs": {
+      "image": [
+        "565",
+        0
+      ],
+      "alpha": [
+        "565",
+        1
+      ]
+    },
+    "class_type": "JoinImageWithAlpha",
+    "_meta": {
+      "title": "合并图像Alpha2"
+    }
+  }
+}

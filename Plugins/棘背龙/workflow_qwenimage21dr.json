@@ -1,0 +1,237 @@
+{
+  "461": {
+    "inputs": {
+      "filename_prefix": "Qwen_image_2.1",
+      "format": "png",
+      "format.bit_depth": "8-bit",
+      "format.input_color_space": "sRGB",
+      "images": [
+        "540",
+        0
+      ]
+    },
+    "class_type": "SaveImageAdvanced",
+    "_meta": {
+      "title": "输出图1"
+    }
+  },
+  "536": {
+    "inputs": {
+      "unet_name": "local/qwen_image_2.1_bf16.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "UNet加载器"
+    }
+  },
+  "537": {
+    "inputs": {
+      "clip_name": "local/qwen3vl_8b_bf16.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "加载CLIP"
+    }
+  },
+  "538": {
+    "inputs": {
+      "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "加载VAE"
+    }
+  },
+  "539": {
+    "inputs": {
+      "width": [
+        "558",
+        0
+      ],
+      "height": [
+        "559",
+        0
+      ],
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "空Latent图像"
+    }
+  },
+  "540": {
+    "inputs": {
+      "samples": [
+        "560",
+        0
+      ],
+      "vae": [
+        "538",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE解码"
+    }
+  },
+  "542": {
+    "inputs": {
+      "device": "auto",
+      "dtype": "default",
+      "model": [
+        "536",
+        0
+      ]
+    },
+    "class_type": "QwenImage21Cache",
+    "_meta": {
+      "title": "Qwen Image 2.1 Cache"
+    }
+  },
+  "543": {
+    "inputs": {
+      "prompt": [
+        "555",
+        0
+      ],
+      "negative_prompt": "",
+      "resolution": 1024,
+      "clip": [
+        "537",
+        0
+      ],
+      "images.image_1": [
+        "567",
+        0
+      ],
+      "vae": [
+        "538",
+        0
+      ]
+    },
+    "class_type": "TextEncodeQwenImage21",
+    "_meta": {
+      "title": "Text Encode Qwen Image 2.1"
+    }
+  },
+  "548": {
+    "inputs": {
+      "max_shift": 0.69,
+      "base_shift": 0.5,
+      "width": [
+        "558",
+        0
+      ],
+      "height": [
+        "559",
+        0
+      ],
+      "model": [
+        "542",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingFlux",
+    "_meta": {
+      "title": "采样算法（Flux）"
+    }
+  },
+  "555": {
+    "inputs": {
+      "value": "把这张图片变成极简矢量图风格的Q版大头，斜角构图，没有脖子，没有嘴，腮红贴纸，竖条单色豆豆眼。RGBA PNG"
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "提示词"
+    }
+  },
+  "558": {
+    "inputs": {
+      "value": 1024
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "宽度"
+    }
+  },
+  "559": {
+    "inputs": {
+      "value": 1024
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "高度"
+    }
+  },
+  "560": {
+    "inputs": {
+      "seed": [
+        "562",
+        0
+      ],
+      "steps": 40,
+      "cfg": 1,
+      "sampler_name": "euler_ancestral",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "548",
+        0
+      ],
+      "positive": [
+        "543",
+        0
+      ],
+      "negative": [
+        "543",
+        1
+      ],
+      "latent_image": [
+        "539",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "K采样器"
+    }
+  },
+  "562": {
+    "inputs": {
+      "seed": 2058760214
+    },
+    "class_type": "SeedNode",
+    "_meta": {
+      "title": "种子"
+    }
+  },
+  "564": {
+    "inputs": {
+      "image": "pasted/image (48).png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "输入图1"
+    }
+  },
+  "567": {
+    "inputs": {
+      "image": [
+        "564",
+        0
+      ],
+      "alpha": [
+        "564",
+        1
+      ]
+    },
+    "class_type": "JoinImageWithAlpha",
+    "_meta": {
+      "title": "合并图像Alpha1"
+    }
+  }
+}
