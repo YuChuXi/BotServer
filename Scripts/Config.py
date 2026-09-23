@@ -12,6 +12,7 @@ class GroupConfig(BaseModel):
     enable_ai_chat: bool = False  # 是否响应 @ 机器人的 AI 聊天
     enable_poke: bool = False  # 是否响应戳一戳
     enable_tarot: bool = False  # 是否启用抽卡
+    enable_image_gen: bool = False  # 是否启用生图（ComfyUI）
 
 
 class ServerDetailConfig(BaseModel):

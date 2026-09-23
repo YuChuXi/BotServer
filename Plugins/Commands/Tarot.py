@@ -1,7 +1,11 @@
 """
-抽牌插件 - 塔罗单张抽牌，回复图片+文本；同一 QQ 同一天抽到同一张牌；启动时预构建全部 Message
+抽牌插件 - 塔罗单张抽牌，回复图片+文本；同一 QQ 同一天抽到同一张牌；启动时预构建图片 base64
 每日抽牌哈希混入外部不可预知量（公开汇率 API 的 USD→CNY），与日期、QQ 号一起 SHA-256。
+
+注意：chatrecorder 会在消息发送后把 base64 图片段就地改写为本机缓存路径（库行为），
+因此缓存物必须是不可变的 base64 字符串，Message 对象每次发送现构造，禁止缓存复用。
 """
+import base64
 import hashlib
 import json
 from datetime import datetime
@@ -19,7 +23,7 @@ TAROT_DIR = _ROOT / "Assets" / "抽牌"
 IMAGE_DIR = TAROT_DIR / "image"
 
 _tarot_cards: dict | None = None
-_tarot_message_cache: dict[tuple[str, bool], Message] = {}
+_tarot_b64_cache: dict[tuple[str, bool], str | None] = {}
 
 # 按自然日缓存外部熵（成功时为汇率字符串，失败时为 fallback），避免重复打 API
 _external_seed_cache: dict = {"date": None, "seed": None}
@@ -32,46 +36,26 @@ def _load_tarot() -> dict:
         return json.load(f)["cards"]
 
 
-def _read_image(pic: str, reverse: bool) -> BytesIO | None:
+def _read_image_b64(pic: str, reverse: bool) -> str | None:
     path = IMAGE_DIR / f"{pic}.png"
     if not path.is_file():
         return None
     data = path.read_bytes()
-    if not reverse:
-        return BytesIO(data)
-    from PIL import Image
-    img = Image.open(BytesIO(data)).convert("RGB")
-    out = BytesIO()
-    img.transpose(Image.Transpose.ROTATE_180).save(out, format="PNG")
-    out.seek(0)
-    return out
-
-
-def _build_one_message(cards: dict, card_key: str, is_up: bool) -> Message:
-    card = cards[card_key]
-    direction = "up" if is_up else "down"
-    name_cn = card["name_cn"]
-    name_en = card["name_en"]
-    meaning = card["meaning"][direction]
-    pos_text = "正位" if is_up else "逆位"
-    bio = _read_image(card["pic"], not is_up)
-    segs = [
-        MessageSegment.text(f'你今天抽到的卡牌是：\n\n    "{name_cn}({name_en})({pos_text})"\n\n'),
-        MessageSegment.text("———— 其寓意为 ————\n"),
-        MessageSegment.text(meaning),
-        MessageSegment.text("喵~"),
-    ]
-    if bio is not None:
-        segs.insert(1, MessageSegment.image(bio))
-    return Message(segs)
+    if reverse:
+        from PIL import Image
+        img = Image.open(BytesIO(data)).convert("RGB")
+        out = BytesIO()
+        img.transpose(Image.Transpose.ROTATE_180).save(out, format="PNG")
+        data = out.getvalue()
+    return base64.b64encode(data).decode()
 
 
 async def _build_tarot_cache():
-    global _tarot_cards, _tarot_message_cache
+    global _tarot_cards, _tarot_b64_cache
     _tarot_cards = _load_tarot()
     for card_key in _tarot_cards:
         for is_up in (True, False):
-            _tarot_message_cache[(card_key, is_up)] = _build_one_message(_tarot_cards, card_key, is_up)
+            _tarot_b64_cache[(card_key, is_up)] = _read_image_b64(_tarot_cards[card_key]["pic"], not is_up)
 
 
 async def _get_daily_external_seed() -> str:
@@ -112,10 +96,23 @@ async def _handle_tarot(event: GroupMessageEvent):
     if not config.get_group_config(event.group_id).enable_tarot:
         return
 
-    if not _tarot_message_cache:
+    if not _tarot_b64_cache:
         await _build_tarot_cache()
 
     external_seed = await _get_daily_external_seed()
     card_key, is_up = _daily_draw(event.user_id, external_seed)
-    msg = _tarot_message_cache[(card_key, is_up)]
-    await _matcher.finish(msg)
+    card = _tarot_cards[card_key]
+    direction = "up" if is_up else "down"
+    pos_text = "正位" if is_up else "逆位"
+    segs = [
+        MessageSegment.text(
+            f'你今天抽到的卡牌是：\n\n    "{card["name_cn"]}({card["name_en"]})({pos_text})"\n\n'
+        ),
+        MessageSegment.text("———— 其寓意为 ————\n"),
+        MessageSegment.text(card["meaning"][direction]),
+        MessageSegment.text("喵~"),
+    ]
+    b64 = _tarot_b64_cache[(card_key, is_up)]
+    if b64 is not None:
+        segs.insert(1, MessageSegment.image(f"base64://{b64}"))
+    await _matcher.finish(Message(segs))
