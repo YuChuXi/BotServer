@@ -1,0 +1,389 @@
+{
+  "461": {
+    "inputs": {
+      "filename_prefix": "Qwen_image_2.1",
+      "format": "png",
+      "format.bit_depth": "8-bit",
+      "format.input_color_space": "sRGB",
+      "images": [
+        "540",
+        0
+      ]
+    },
+    "class_type": "SaveImageAdvanced",
+    "_meta": {
+      "title": "输出图1"
+    }
+  },
+  "536": {
+    "inputs": {
+      "unet_name": "local/qwen_image_2.1_bf16.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "UNet加载器"
+    }
+  },
+  "537": {
+    "inputs": {
+      "clip_name": "local/qwen3vl_8b_bf16.safetensors",
+      "type": "qwen_image",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "加载CLIP"
+    }
+  },
+  "538": {
+    "inputs": {
+      "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "加载VAE"
+    }
+  },
+  "539": {
+    "inputs": {
+      "width": [
+        "558",
+        0
+      ],
+      "height": [
+        "559",
+        0
+      ],
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "空Latent图像"
+    }
+  },
+  "540": {
+    "inputs": {
+      "samples": [
+        "573",
+        0
+      ],
+      "vae": [
+        "538",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE解码"
+    }
+  },
+  "542": {
+    "inputs": {
+      "device": "auto",
+      "dtype": "default",
+      "model": [
+        "536",
+        0
+      ]
+    },
+    "class_type": "QwenImage21Cache",
+    "_meta": {
+      "title": "1 Cache"
+    }
+  },
+  "543": {
+    "inputs": {
+      "prompt": [
+        "555",
+        0
+      ],
+      "negative_prompt": "",
+      "resolution": 1024,
+      "clip": [
+        "537",
+        0
+      ],
+      "images.image_1": [
+        "566",
+        0
+      ],
+      "images.image_2": [
+        "567",
+        0
+      ],
+      "vae": [
+        "538",
+        0
+      ]
+    },
+    "class_type": "TextEncodeQwenImage21",
+    "_meta": {
+      "title": "Text Encode Qwen Image 2.1"
+    }
+  },
+  "555": {
+    "inputs": {
+      "value": "把图一中的角色换成图二的"
+    },
+    "class_type": "PrimitiveStringMultiline",
+    "_meta": {
+      "title": "提示词"
+    }
+  },
+  "558": {
+    "inputs": {
+      "value": 832
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "宽度"
+    }
+  },
+  "559": {
+    "inputs": {
+      "value": 1248
+    },
+    "class_type": "PrimitiveInt",
+    "_meta": {
+      "title": "高度"
+    }
+  },
+  "562": {
+    "inputs": {
+      "seed": 3037416242
+    },
+    "class_type": "SeedNode",
+    "_meta": {
+      "title": "种子"
+    }
+  },
+  "564": {
+    "inputs": {
+      "image": "download (10).jpg"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "输入图1"
+    }
+  },
+  "565": {
+    "inputs": {
+      "image": "download (11).jpg"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "输入图2"
+    }
+  },
+  "566": {
+    "inputs": {
+      "image": [
+        "564",
+        0
+      ],
+      "alpha": [
+        "564",
+        1
+      ]
+    },
+    "class_type": "JoinImageWithAlpha",
+    "_meta": {
+      "title": "合并图像Alpha1"
+    }
+  },
+  "567": {
+    "inputs": {
+      "image": [
+        "565",
+        0
+      ],
+      "alpha": [
+        "565",
+        1
+      ]
+    },
+    "class_type": "JoinImageWithAlpha",
+    "_meta": {
+      "title": "合并图像Alpha2"
+    }
+  },
+  "569": {
+    "inputs": {
+      "model": [
+        "578",
+        0
+      ],
+      "conditioning": [
+        "543",
+        0
+      ]
+    },
+    "class_type": "BasicGuider",
+    "_meta": {
+      "title": "BasicGuider (CFG off)"
+    }
+  },
+  "570": {
+    "inputs": {
+      "noise_seed": [
+        "562",
+        0
+      ]
+    },
+    "class_type": "RandomNoise",
+    "_meta": {
+      "title": "随机噪波"
+    }
+  },
+  "571": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "K采样器选择"
+    }
+  },
+  "572": {
+    "inputs": {
+      "nodes": "1.0, 0.9375, 0.875, 0.75, 0.5, 0.25",
+      "latent": [
+        "539",
+        0
+      ]
+    },
+    "class_type": "ViggleTurboSigmas",
+    "_meta": {
+      "title": "Qwen-Image-2.1 Viggle Turbo Sigmas"
+    }
+  },
+  "573": {
+    "inputs": {
+      "noise": [
+        "570",
+        0
+      ],
+      "guider": [
+        "569",
+        0
+      ],
+      "sampler": [
+        "571",
+        0
+      ],
+      "sigmas": [
+        "577",
+        0
+      ],
+      "latent_image": [
+        "539",
+        0
+      ]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": {
+      "title": "自定义采样器（高级）"
+    }
+  },
+  "574": {
+    "inputs": {
+      "lora_name": "qwen2.1/Qwen-Image-2.1-viggle-turbo-v0.2.1-6step-lora-r256.safetensors",
+      "strength": 1,
+      "model": [
+        "542",
+        0
+      ]
+    },
+    "class_type": "ViggleTurboLora",
+    "_meta": {
+      "title": "Qwen-Image-2.1 Viggle Turbo LoRA (unmerged)"
+    }
+  },
+  "575": {
+    "inputs": {
+      "scheduler": "simple",
+      "steps": 40,
+      "denoise": 1,
+      "model": [
+        "542",
+        0
+      ]
+    },
+    "class_type": "BasicScheduler",
+    "_meta": {
+      "title": "基本调度器"
+    }
+  },
+  "577": {
+    "inputs": {
+      "switch": [
+        "580",
+        0
+      ],
+      "on_false": [
+        "575",
+        0
+      ],
+      "on_true": [
+        "572",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "切换"
+    }
+  },
+  "578": {
+    "inputs": {
+      "switch": [
+        "580",
+        0
+      ],
+      "on_false": [
+        "579",
+        0
+      ],
+      "on_true": [
+        "574",
+        0
+      ]
+    },
+    "class_type": "ComfySwitchNode",
+    "_meta": {
+      "title": "切换"
+    }
+  },
+  "579": {
+    "inputs": {
+      "max_shift": 0.69,
+      "base_shift": 0.5,
+      "width": [
+        "558",
+        0
+      ],
+      "height": [
+        "559",
+        0
+      ],
+      "model": [
+        "542",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingFlux",
+    "_meta": {
+      "title": "采样算法（Flux）"
+    }
+  },
+  "580": {
+    "inputs": {
+      "value": false
+    },
+    "class_type": "PrimitiveBoolean",
+    "_meta": {
+      "title": "EnableTurbo"
+    }
+  }
+}
