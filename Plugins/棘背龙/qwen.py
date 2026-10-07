@@ -19,7 +19,8 @@ from .comfy import POLL_TIMEOUT, execute_prompt, fetch_output_images, upload_ima
 RESOLUTION_STEP = int(os.getenv("COMFY_RESOLUTION_STEP", "32"))  # 分辨率取整步进
 # 尾行档位 -> 基准分辨率（1:1 边长）；无档位为默认档
 RESOLUTION_LEVELS = {"": 1024, "高清": 1536, "超清": 2048}
-QWEN_EDIT_TRIGGER = re.compile(r"☝\ufe0f*\s*([🤓😋])")
+# ☝ 与 🤓/😋 之间可能插入肤色修饰符（U+1F3FB~U+1F3FF）与变体选择符（U+FE0F），如 ☝🏻️
+QWEN_EDIT_TRIGGER = re.compile(r"☝[\ufe0f\U0001f3fb-\U0001f3ff]*\s*([🤓😋])")
 QWEN_RATIO_LINE = re.compile(r"^(\d{1,4})[:：](\d{1,4})$")
 _RESOLUTION_TOKENS = tuple(k for k in RESOLUTION_LEVELS if k)
 

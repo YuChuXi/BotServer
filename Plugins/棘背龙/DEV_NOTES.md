@@ -48,6 +48,10 @@
 
 - **OneBot 客户端（NapCat）与本服务不在同一台机器**：任何发给 QQ 的图片必须自包含（`base64://` 或 URL），禁止 `file://` 本机路径。
 - **消息图片的获取走协议端**：`bot.get_image(file=消息段 file 或 url)` 取 `base64`（NapCat 文档：[获取图片](https://napcat.apifox.cn/226657066e0)），下载由 NapCat 完成。bot 不自行 httpx 访问 QQ 图片 CDN——`gchat.qpic.cn` 校验 Referer（缺失返回 400）且 rkey 时效短。协议端未回 `base64` 时显式报错，不做兜底。
+- **被回复消息的图片有两个协议端静默失败点**（均无用户可见反馈，处理器必须显式报错）：
+  1. 适配器 `_check_reply`（`nonebot/adapters/onebot/v11/bot.py`）靠协议端 `get_msg` 还原被回复消息；协议端查不到时（NapCat `MessageUnique` 无映射 / 消息过期）`event.reply` 保持 `None`，且 **reply 段残留在 `event.message` 中**。处理器以"消息中残留 reply 段"识别此情形。
+  2. NapCat 的 `picElement` 转换器（`napcat-onebot/api/msg.ts`）在图片 URL 获取失败时 `return null` **丢弃整个图片段**（`parseMessageSegments` 过滤 null），被回复消息的段列表里就没有 image。表现为：回复了图片，`event.reply.message` 却只有文本。
+  - 识别出这两种情形时报错并终止，不按纯文本直出；`get_image` 取参考图失败同样报错终止。
 - **chatrecorder 0.7.0（上游最新）的库行为**：`on_called_api` 记录 `message_sent` 时会把发送 Message 里的 `base64://` 图片段**就地改写**为 `file:///~/.cache/nonebot2/nonebot_plugin_chatrecorder/images/<md5>.cache`（为省内存）。因此**任何被复用发送的 Message 对象**第二次都会把本机路径发给远程 NapCat → Node 侧 ENOENT。规避：缓存物用不可变的 base64 字符串，Message 每次发送现构造（Tarot.py 已按此实现）；收到的 `event.message` 同样会被改写，禁止把收到的消息段原样再发送。
 - `comfy.execute_prompt`：先连 WebSocket 再提交队列（事件不丢失），`asyncio.timeout` 总超时，中断与超时以异常传播。
 - 分辨率：`qwen.calc_resolution` 总像素 ≈ 档位²，`RESOLUTION_LEVELS = {"": 1024, "高清": 1536, "超清": 2048}`。

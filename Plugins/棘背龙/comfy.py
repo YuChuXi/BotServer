@@ -11,7 +11,6 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 import websockets
-from nonebot import logger
 
 COMFY_SERVER = os.getenv(
     "COMFY_SERVER", "https://10.147.20.20:48189"
@@ -131,10 +130,12 @@ async def execute_prompt(
 
     Raises:
         TimeoutError: 超过 timeout 仍未收到完成事件。
+        RuntimeError: ComfyUI 节点执行出错。
         websockets.WebSocketException: WebSocket 建立失败或中断。
 
     Callers:
         - `Plugins/棘背龙/qwen.py:run_edit`
+        - `Plugins/棘背龙/avatar.py:run_avatar_workflow`
     """
     client_id = str(uuid.uuid4())
     async with websockets.connect(
@@ -150,8 +151,10 @@ async def execute_prompt(
                 continue
             m_type = data.get("type")
             if m_type == "execution_error":
-                logger.error(f"ComfyUI 执行出错: {m_data}")
-                return prompt_id
+                raise RuntimeError(
+                    f"节点 {m_data.get('node_type')}({m_data.get('node_id')}) "
+                    f"执行失败: {m_data.get('exception_message')}"
+                )
             if m_type == "execution_success" or (
                 m_type == "executing" and m_data.get("node") is None
             ):

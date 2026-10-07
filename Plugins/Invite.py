@@ -6,6 +6,7 @@ from nonebot import on_request, on_command
 from nonebot.adapters.onebot.v11 import GroupRequestEvent, Bot, Message
 from nonebot.params import CommandArg
 from nonebot.log import logger
+from Scripts.Config import config
 from Scripts.Utils import HOST_ADMIN_PERMISSION
 
 # 邀请事件监听 (仅做日志记录，不再拦截存储)
@@ -13,9 +14,11 @@ invite_matcher = on_request(priority=1, block=False)
 
 @invite_matcher.handle()
 async def handle_group_invite(bot: Bot, event: GroupRequestEvent):
-    """监听加群邀请并记录日志"""
+    """监听加群邀请并记录日志，私聊告知主机管理员"""
     if event.sub_type == 'invite':
         logger.info(f"收到邀请入群请求: 群 {event.group_id}, 邀请人 {event.user_id}, Flag: {event.flag}")
+        for uid in config.host_admins:
+            await bot.send_private_msg(user_id=int(uid), message=f"收到邀请入群请求: 群 {event.group_id}, 邀请人 {event.user_id}")
 
 # 查看邀请命令
 view_invites_cmd = on_command("查看邀请", aliases={"list_invites"}, permission=HOST_ADMIN_PERMISSION, priority=10, block=True)

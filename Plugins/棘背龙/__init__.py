@@ -10,8 +10,10 @@
 import base64
 import os
 import uuid
-from typing import List, Literal, Tuple
+from typing import Awaitable, Callable, List, Literal, Tuple
 
+import httpx
+import websockets
 from nonebot import logger, on_regex
 from nonebot.adapters.onebot.v11 import (
     ActionFailed,
@@ -23,6 +25,7 @@ from nonebot.adapters.onebot.v11 import (
     MessageSegment,
     PrivateMessageEvent,
 )
+from nonebot.matcher import Matcher
 from nonebot.rule import Rule
 
 from Scripts.Config import config
@@ -47,6 +50,51 @@ AVATAR_WORKFLOW_TEMPLATES = {
 
 # 群配置中控制各功能的字段名
 FeatureSwitch = Literal["enable_image_gen", "enable_avatar_gen"]
+
+# 生图链路（取参考图/下载头像/上传/提交/执行/取回输出）可能抛出的异常
+GENERATE_ERRORS = (
+    httpx.HTTPError,
+    OSError,
+    RuntimeError,
+    KeyError,
+    TimeoutError,
+    ValueError,
+    websockets.WebSocketException,
+)
+
+
+async def reply_generated(
+    matcher: Matcher, generate: Callable[[], Awaitable[List[bytes]]]
+) -> None:
+    """执行生图流程并回复输出图，失败时向会话发送报错消息。
+
+    Args:
+        matcher (Matcher): 响应器，用于发送消息。
+        generate (Callable[[], Awaitable[List[bytes]]]): 生图协程工厂，
+            返回输出图字节列表；失败时抛出 GENERATE_ERRORS 中的异常。
+
+    Callers:
+        - `Plugins/棘背龙/__init__.py:_handle_qwen_edit`
+        - `Plugins/棘背龙/__init__.py:_register_avatar`
+    """
+    try:
+        images = await generate()
+    except GENERATE_ERRORS as e:
+        logger.exception("生图失败")
+        await matcher.send(f"生图失败：{e}", reply_message=True)
+        return
+    if not images:
+        await matcher.send("生图失败：ComfyUI 未返回输出图", reply_message=True)
+        return
+    await matcher.send(
+        Message(
+            [
+                MessageSegment.image(f"base64://{base64.b64encode(b).decode()}")
+                for b in images
+            ]
+        ),
+        reply_message=True,
+    )
 
 
 def is_allowed(event: Event, flag: FeatureSwitch) -> bool:
@@ -116,15 +164,37 @@ qwen_edit = on_regex(
 
 
 @qwen_edit.handle()
-async def _handle_qwen_edit(bot: Bot, event: MessageEvent):
-    """取参考图与提示词，执行生图编辑并回复输出图。"""
+async def _handle_qwen_edit(matcher: Matcher, bot: Bot, event: MessageEvent):
+    """取参考图与提示词，执行生图编辑并回复输出图，失败时报错。
+
+    Args:
+        matcher (Matcher): 响应器（依赖注入）。
+        bot (Bot): OneBot V11 Bot 实例（依赖注入）。
+        event (MessageEvent): 消息事件。
+
+    Callers:
+        - NoneBot 响应器 `qwen_edit` 的处理阶段。
+    """
     emoji, prompt, ratio, resolution = parse_edit_text(event.get_plaintext())
+
+    # 适配器读取被回复消息失败时（协议端 get_msg 未命中），reply 段会残留在消息里，
+    # 此时被回复消息的内容不可得，无法取参考图
+    if any(s.type == "reply" for s in event.get_message()):
+        await matcher.send("读取被回复消息失败：协议端未返回该消息", reply_message=True)
+        return
 
     # 被回复消息的图片排最前，其后是本条消息的图片，共取前 10 张
     img_segs = [s for s in event.get_message() if s.type == "image"]
     if event.reply is not None:
         img_segs = [s for s in event.reply.message if s.type == "image"] + img_segs
     refs = [u for s in img_segs if (u := s.data.get("file") or s.data.get("url"))][:10]
+
+    # 回复消息却没有取到任何参考图：协议端很可能丢弃了被回复消息的图片段
+    # （NapCat picElement 转换器在图片 URL 获取失败时丢弃整段），必须显式报错而非按纯文本直出
+    if not refs and event.reply is not None:
+        logger.warning(f"被回复消息中未提取到图片，消息段: {event.reply.message}")
+        await matcher.send("被回复消息中未找到图片，请直接在消息中附图", reply_message=True)
+        return
 
     if not prompt and not refs:
         return
@@ -134,26 +204,18 @@ async def _handle_qwen_edit(bot: Bot, event: MessageEvent):
         try:
             img_files.append(await fetch_message_image(bot, ref))
         except (ActionFailed, RuntimeError, ValueError) as e:
-            logger.warning(f"获取参考图失败，已跳过: {ref} ({e})")
+            await matcher.send(f"参考图获取失败：{e}", reply_message=True)
+            return
 
-    images = await run_edit(
-        prompt,
-        img_files,
-        ratio,
-        resolution,
-        os.path.join(WORKFLOWS_DIR, QWEN_WORKFLOW_TEMPLATES[emoji]),
-    )
-    if not images:
-        return
-
-    await qwen_edit.send(
-        Message(
-            [
-                MessageSegment.image(f"base64://{base64.b64encode(b).decode()}")
-                for b in images
-            ]
+    await reply_generated(
+        matcher,
+        lambda: run_edit(
+            prompt,
+            img_files,
+            ratio,
+            resolution,
+            os.path.join(WORKFLOWS_DIR, QWEN_WORKFLOW_TEMPLATES[emoji]),
         ),
-        reply_message=True,
     )
 
 
@@ -170,16 +232,17 @@ def _register_avatar(pattern: str, template: str) -> None:
     matcher = on_regex(pattern, rule=Rule(_avatar_rule), block=True, priority=10)
 
     @matcher.handle()
-    async def _handle_avatar(bot: Bot, event: MessageEvent):
-        """下载发送者头像，按模板出图并回复。"""
-        img_bytes, filename = await download_avatar(event.get_user_id())
-        images = await run_avatar_workflow(
-            img_bytes, filename, os.path.join(WORKFLOWS_DIR, template)
-        )
-        if not images:
-            return
-        b64 = base64.b64encode(images[0]).decode()
-        await matcher.send(MessageSegment.image(f"base64://{b64}"), reply_message=True)
+    async def _handle_avatar(event: MessageEvent):
+        """下载发送者头像，按模板出图并回复，失败时报错。"""
+
+        async def generate() -> List[bytes]:
+            """下载发送者头像并按模板执行工作流，返回输出图字节列表。"""
+            img_bytes, filename = await download_avatar(event.get_user_id())
+            return await run_avatar_workflow(
+                img_bytes, filename, os.path.join(WORKFLOWS_DIR, template)
+            )
+
+        await reply_generated(matcher, generate)
 
 
 for _pattern, _template in AVATAR_WORKFLOW_TEMPLATES.items():

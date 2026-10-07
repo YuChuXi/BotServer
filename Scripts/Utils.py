@@ -79,8 +79,8 @@ async def has_mc_server_admin_permission(event: GroupMessageEvent) -> bool:
     return event.user_id in config.mc_server_admins
 
 
-async def has_host_admin_permission(event: GroupMessageEvent) -> bool:
-    """主机管理员权限（可以执行shell命令）"""
+async def has_host_admin_permission(event: MessageEvent) -> bool:
+    """主机管理员权限（可以执行shell命令），群聊与私聊均可"""
     return event.user_id in config.host_admins
 
 
