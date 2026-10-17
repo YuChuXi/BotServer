@@ -41,11 +41,11 @@ QWEN_WORKFLOW_TEMPLATES = {
 }
 # 触发关键词 -> 模板
 AVATAR_WORKFLOW_TEMPLATES = {
-    "哈气|哈!|哈！": "workflow_jibeilong.json",
-    "鼬": "workflow_you.json",
-    "冲!|冲！": "workflow_chong.json",
-    "我超|超!|超！|敲里": "workflow_qiaolima.json",
-    r"这么强|强强|虽虽|<\(º0º\)>|弓虽": "workflow_qiang.json",
+    # "哈气|哈!|哈！": "workflow_jibeilong.json",
+    # "鼬": "workflow_you.json",
+    # "冲!|冲！": "workflow_chong.json",
+    # "我超|超!|超！|敲里": "workflow_qiaolima.json",
+    # r"这么强|强强|虽虽|<\(º0º\)>|弓虽": "workflow_qiang.json",
 }
 
 # 群配置中控制各功能的字段名
